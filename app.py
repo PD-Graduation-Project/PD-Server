@@ -14,8 +14,7 @@ def create_app():
 
     # Import blueprints here to avoid circular imports
     from routes.auth import auth_bp
-    # from routes.tests import tests_bp
-    # from routes.history import history_bp
+    from routes.tests import tests_bp
 
     # Create tables
     with app.app_context():
@@ -23,8 +22,7 @@ def create_app():
 
     # Register blueprints (routes)
     app.register_blueprint(auth_bp)
-    # app.register_blueprint(tests_bp)
-    # app.register_blueprint(history_bp)
+    app.register_blueprint(tests_bp)
 
     # Health check endpoint
     @app.route("/health", methods=["GET"])
