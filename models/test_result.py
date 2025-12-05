@@ -33,10 +33,10 @@ class TestResult(db.Model):
         return {
             "id": self.id,
             "user_id": self.user_id,
-            "tremor-score": self.tremor_score,
-            "drawing-score": self.drawing_score,
-            "test-score": self.test_score,
-            "overall-score": self.overall_score,
+            "tremor_score": self.tremor_score,
+            "drawing_score": self.drawing_score,
+            "speech_score": self.speech_score,
+            "overall_score": self.overall_score,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
             "completed_at": self.completed_at.isoformat()
