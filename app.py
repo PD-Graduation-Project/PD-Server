@@ -2,9 +2,6 @@ from flask import Flask, jsonify
 from flask_cors import CORS
 from config import Config
 from models.database import db
-from routes.auth import auth_bp
-# from routes.tests import tests_bp
-# from routes.history import history_bp
 
 
 def create_app():
@@ -15,14 +12,19 @@ def create_app():
     db.init_app(app)
     CORS(app)
 
-    # Register blueprints (routes)
-    app.register_blueprint(auth_bp)
-    # app.register_blueprint(tests_bp)
-    # app.register_blueprint(history_bp)
+    # Import blueprints here to avoid circular imports
+    from routes.auth import auth_bp
+    # from routes.tests import tests_bp
+    # from routes.history import history_bp
 
     # Create tables
     with app.app_context():
         db.create_all()
+
+    # Register blueprints (routes)
+    app.register_blueprint(auth_bp)
+    # app.register_blueprint(tests_bp)
+    # app.register_blueprint(history_bp)
 
     # Health check endpoint
     @app.route("/health", methods=["GET"])
