@@ -41,11 +41,6 @@ Special handling for tremor data collection:
 
 ### Test Invocation Models
 
-- **Drawing & Voice**: Synchronous - app calls API, waits for response
-- **Tremor**: Asynchronous - background collection, server-initiated notification.
-
-### Alternative Design Option
-
 Implement a unified completion endpoint:
 
 - Tests don't return immediate results
@@ -86,18 +81,6 @@ Returns: List of all tests for authenticated user
 GET /api/test/:id
 Returns: Detailed results for specific test
 ```
-
-## Implementation Notes
-
-**HTTP Methods**: Changed from PUT to POST for test endpoints (POST is standard for resource creation)
-
-**Pending Decisions**:
-
-- Real-time notification mechanism for tremor results
-- WebSocket vs polling vs push notifications
-- File size limits and validation
-- Rate limiting strategy
-- Error handling for failed model inference
 
 ## Development Priority
 
