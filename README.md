@@ -82,10 +82,68 @@ GET /api/test/:id
 Returns: Detailed results for specific test
 ```
 
-## Development Priority
+## App Sequence Diagram
 
-1. Authentication system
-2. Drawing and voice test endpoints (synchronous flow)
-3. Database schema and storage
-4. History retrieval
-5. Tremor asynchronous flow (final phase)
+```mermaid
+sequenceDiagram
+    participant Client as Client/Frontend
+    participant App as Flask App
+    participant Auth as Auth Routes
+    participant Tests as Tests Routes
+    participant DB as Database
+    participant ML as ML Models
+    participant Files as File System
+
+    Note over Client,ML: 1. User Registration/Login Flow
+    Client->>+Auth: POST /api/auth/register
+    Auth->>+DB: Create user record
+    DB-->>-Auth: Return user object
+    Auth->>-Client: JWT Token + User Info
+
+    Client->>+Auth: POST /api/auth/login
+    Auth->>+DB: Validate credentials
+    DB-->>-Auth: User object
+    Auth->>-Client: JWT Token + User Info
+
+    Note over Client,ML: 2. Starting a Test
+    Client->>+Tests: POST /api/test/ (with JWT)
+    Tests->>+DB: Create new test record
+    DB-->>-Tests: Test object
+    Tests->>-Client: Test ID + Test Object
+
+    Note over Client,ML: 3. Submitting Tremor Test
+    Client->>+Tests: POST /api/test/tremor (with JWT + file)
+    Tests->>+Files: Save uploaded file
+    Files-->>-Tests: File path
+    Tests->>+ML: Process tremor file
+    ML-->>-Tests: Analysis results
+    Tests->>+DB: Update tremor_score
+    DB-->>-Tests: Updated test object
+    Tests->>-Client: Success response + ML results
+
+    Note over Client,ML: 4. Submitting Drawing Test
+    Client->>+Tests: POST /api/test/drawing (with JWT + file)
+    Tests->>+Files: Save uploaded file
+    Files-->>-Tests: File path
+    Tests->>+ML: Process drawing file
+    ML-->>-Tests: Analysis results
+    Tests->>+DB: Update drawing_score
+    DB-->>-Tests: Updated test object
+    Tests->>-Client: Success response + ML results
+
+    Note over Client,ML: 5. Submitting Speech Test
+    Client->>+Tests: POST /api/test/speech (with JWT + file)
+    Tests->>+Files: Save uploaded file
+    Files-->>-Tests: File path
+    Tests->>+ML: Process speech file
+    ML-->>-Tests: Analysis results
+    Tests->>+DB: Update speech_score
+    DB-->>-Tests: Updated test object
+    Tests->>-Client: Success response + ML results
+
+    Note over Client,ML: 6. Retrieving Test Results
+    Client->>+Tests: GET /api/test/{test_id} (with JWT)
+    Tests->>+DB: Retrieve test record
+    DB-->>-Tests: Test object
+    Tests->>-Client: Test result with scores and progress
+```
