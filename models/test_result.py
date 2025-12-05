@@ -20,8 +20,6 @@ class TestResult(db.Model):
     drawing_score = db.Column(db.Float, nullable=True)  # From drawing test
     speech_score = db.Column(db.Float, nullable=True)  # From speech test
 
-    overall_score = db.Column(db.Float, nullable=True)  # 0.0 to 1.0
-
     # Timestamps
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(
@@ -36,7 +34,6 @@ class TestResult(db.Model):
             "tremor_score": self.tremor_score,
             "drawing_score": self.drawing_score,
             "speech_score": self.speech_score,
-            "overall_score": self.overall_score,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
             "completed_at": self.completed_at.isoformat()
