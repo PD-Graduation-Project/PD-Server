@@ -4,7 +4,7 @@
 
 - [ ] Initialize project repository
 - [ ] Set up project structure (folders: `/api`, `/models`, `/utils`, `/db`)
-- [ ] Choose and configure web framework (Express.js/Flask/FastAPI)
+- [x] Choose and configure web framework (Express.js/Flask/FastAPI)
 - [ ] Set up environment variables (.env file)
 - [ ] Configure CORS for mobile app communication
 - [ ] Set up logging system
