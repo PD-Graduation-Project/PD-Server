@@ -1,5 +1,6 @@
 from flask import Flask, jsonify
 from flask_cors import CORS
+from flask_migrate import Migrate
 from config import Config
 from models.database import db
 
@@ -10,6 +11,8 @@ def create_app():
 
     # Initialize extensions
     db.init_app(app)
+    migrate = Migrate(app, db)
+
     CORS(app)
 
     # Import blueprints here to avoid circular imports
@@ -27,7 +30,7 @@ def create_app():
     # Health check endpoint
     @app.route("/health", methods=["GET"])
     def health_check():
-        return jsonify({"status": "healthy", "service": "pd-server"}), 200
+        return jsonify({"status": "healthy"}), 200
 
     # Error handlers
     @app.errorhandler(404)

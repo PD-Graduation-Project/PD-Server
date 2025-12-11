@@ -1,0 +1,942 @@
+openapi: 3.0.3
+info:
+  title: PD-Server API
+  description: A server application for Parkinson's Disease detection that processes tremor, spiral drawing, and voice data through ML models and manages user authentication and test history.
+  version: 1.0.0
+servers:
+  - url: http://localhost:5000
+    description: Local development server
+security:
+  - bearerAuth: []
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: Unique identifier for the user
+        email:
+          type: string
+          format: email
+          description: User's email address
+        created_at:
+          type: string
+          format: date-time
+          description: Timestamp when the user account was created
+
+    TestResult:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: Unique identifier for the test
+        user_id:
+          type: integer
+          description: ID of the user who took the test
+        tremor_score:
+          type: number
+          format: float
+          nullable: true
+          description: Score from tremor analysis (higher = more severe)
+        drawing_score:
+          type: number
+          format: float
+          nullable: true
+          description: Score from drawing analysis (higher = more severe)
+        speech_score:
+          type: number
+          format: float
+          nullable: true
+          description: Score from speech analysis (higher = more severe)
+        pd_probability:
+          type: number
+          format: float
+          nullable: true
+          description: Overall probability of Parkinson's Disease
+        created_at:
+          type: string
+          format: date-time
+          description: Timestamp when the test was created
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Timestamp when the test was completed
+
+    MLResults:
+      type: object
+      properties:
+        score:
+          type: number
+          format: float
+          description: Main score from ML analysis
+        confidence:
+          type: number
+          format: float
+          description: Confidence level in the result
+        frequency_hz:
+          type: number
+          format: float
+          description: Frequency of tremor (for tremor analysis)
+        amplitude:
+          type: number
+          format: float
+          description: Amplitude of tremor (for tremor analysis)
+        regularity:
+          type: number
+          format: float
+          description: Regularity of movement (for tremor analysis)
+        smoothness:
+          type: number
+          format: float
+          description: Smoothness of drawings (for drawing analysis)
+        tremor_index:
+          type: number
+          format: float
+          description: Tremor index in drawings (for drawing analysis)
+        spiral_deviation:
+          type: number
+          format: float
+          description: Deviation from perfect spiral (for drawing analysis)
+        pitch_variability:
+          type: number
+          format: float
+          description: Pitch variability in speech (for speech analysis)
+        voice_stability:
+          type: number
+          format: float
+          description: Voice stability (for speech analysis)
+        articulation:
+          type: number
+          format: float
+          description: Articulation quality (for speech analysis)
+
+    Progress:
+      type: object
+      properties:
+        completed:
+          type: integer
+          description: Number of completed tests
+        total:
+          type: integer
+          description: Total number of tests
+        percentage:
+          type: number
+          format: float
+          description: Percentage of tests completed
+
+    TestWithProgress:
+      type: object
+      properties:
+        id:
+          type: integer
+        user_id:
+          type: integer
+        tremor_score:
+          type: number
+          format: float
+          nullable: true
+        drawing_score:
+          type: number
+          format: float
+          nullable: true
+        speech_score:
+          type: number
+          format: float
+          nullable: true
+        pd_probability:
+          type: number
+          format: float
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+        progress:
+          $ref: '#/components/schemas/Progress'
+        status:
+          type: string
+          enum: [not_started, in_progress, completed]
+
+    Pagination:
+      type: object
+      properties:
+        page:
+          type: integer
+          description: Current page number
+        per_page:
+          type: integer
+          description: Number of items per page
+        total_pages:
+          type: integer
+          description: Total number of pages
+        total_items:
+          type: integer
+          description: Total number of items
+        has_next:
+          type: boolean
+          description: Whether there's a next page
+        has_prev:
+          type: boolean
+          description: Whether there's a previous page
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Error message
+
+    LoginRequest:
+      type: object
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+          example: user@example.com
+        password:
+          type: string
+          example: password123
+
+    RegisterRequest:
+      type: object
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+          example: user@example.com
+        password:
+          type: string
+          example: password123
+
+paths:
+  /health:
+    get:
+      summary: Health check endpoint
+      description: Check if the service is running
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: healthy
+                  service:
+                    type: string
+                    example: pd-server
+
+  /api/auth/register:
+    post:
+      summary: Register a new user
+      description: Create a new user account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: User registered successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: User registered successfully
+                  token:
+                    type: string
+                    description: JWT token for authentication
+                  user:
+                    $ref: '#/components/schemas/User'
+        '400':
+          description: Bad request - missing email or password
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Conflict - email already registered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/auth/login:
+    post:
+      summary: Login user
+      description: Authenticate user and return auth token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Login successful
+                  token:
+                    type: string
+                    description: JWT token for authentication
+                  user:
+                    $ref: '#/components/schemas/User'
+        '400':
+          description: Bad request - missing email or password
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized - invalid email or password
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/test/:
+    post:
+      summary: Start a new test
+      description: Create a new test record and return its ID
+      security:
+        - bearerAuth: []
+      responses:
+        '201':
+          description: Test started successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Test started successfully
+                  test_id:
+                    type: integer
+                    example: 123
+                  test:
+                    $ref: '#/components/schemas/TestResult'
+        '200':
+          description: Existing test found (user has an incomplete test)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Existing test found
+                  test_id:
+                    type: integer
+                    example: 123
+                  test:
+                    $ref: '#/components/schemas/TestResult'
+        '401':
+          description: Unauthorized - invalid or missing token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/test/{test_id}:
+    get:
+      summary: Get test result by ID
+      description: Get a specific test result by ID
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: test_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Test result retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  test:
+                    $ref: '#/components/schemas/TestWithProgress'
+        '401':
+          description: Unauthorized - invalid or missing token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Test not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/test/current:
+    get:
+      summary: Get current test
+      description: Get the user's current (incomplete) test
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Current test retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  test:
+                    $ref: '#/components/schemas/TestWithProgress'
+        '401':
+          description: Unauthorized - invalid or missing token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: No current test found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: No current test found
+
+  /api/test/history:
+    get:
+      summary: Get test history
+      description: Get all tests for the authenticated user with pagination
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 1
+        - name: per_page
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 10
+        - name: completed
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [true, false]
+      responses:
+        '200':
+          description: Test history retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  tests:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/TestWithProgress'
+                  pagination:
+                    $ref: '#/components/schemas/Pagination'
+
+  /api/test/tremor/start:
+    post:
+      summary: Start tremor test
+      description: Start or get existing tremor test
+      security:
+        - bearerAuth: []
+      responses:
+        '201':
+          description: Test started successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Test started successfully
+                  test_id:
+                    type: integer
+                    example: 123
+                  test:
+                    $ref: '#/components/schemas/TestWithProgress'
+        '200':
+          description: Existing test found (user has an incomplete test)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Existing test found
+                  test_id:
+                    type: integer
+                    example: 123
+                  test:
+                    $ref: '#/components/schemas/TestWithProgress'
+        '401':
+          description: Unauthorized - invalid or missing token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/test/tremor/status:
+    get:
+      summary: Get tremor test status
+      description: Get tremor test status
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: test_id
+          in: query
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Tremor status retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  test:
+                    $ref: '#/components/schemas/TestWithProgress'
+        '400':
+          description: Bad request - test_id is required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized - invalid or missing token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Test not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/test/tremor/submit:
+    post:
+      summary: Submit tremor test data
+      description: Submit tremor test data (file upload)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: test_id
+          in: query
+          required: false
+          schema:
+            type: integer
+          description: Test ID (can also be provided in form data)
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - file
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: Tremor data file (txt, csv, or json)
+                test_id:
+                  type: integer
+                  description: Test ID (alternative way to provide test_id)
+      responses:
+        '200':
+          description: Tremor test submitted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Tremor test submitted successfully
+                  test_id:
+                    type: integer
+                    example: 123
+                  tremor_score:
+                    type: number
+                    format: float
+                    example: 0.725
+                  ml_results:
+                    $ref: '#/components/schemas/MLResults'
+                  test:
+                    $ref: '#/components/schemas/TestWithProgress'
+        '400':
+          description: Bad request - missing test_id or invalid file
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized - invalid or missing token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Test not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/test/drawing/start:
+    post:
+      summary: Start drawing test
+      description: Start or get existing drawing test
+      security:
+        - bearerAuth: []
+      responses:
+        '201':
+          description: Test started successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Test started successfully
+                  test_id:
+                    type: integer
+                    example: 123
+                  test:
+                    $ref: '#/components/schemas/TestWithProgress'
+        '200':
+          description: Existing test found (user has an incomplete test)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Existing test found
+                  test_id:
+                    type: integer
+                    example: 123
+                  test:
+                    $ref: '#/components/schemas/TestWithProgress'
+        '401':
+          description: Unauthorized - invalid or missing token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/test/drawing/status:
+    get:
+      summary: Get drawing test status
+      description: Get drawing test status
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: test_id
+          in: query
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Drawing status retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  test:
+                    $ref: '#/components/schemas/TestWithProgress'
+        '400':
+          description: Bad request - test_id is required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized - invalid or missing token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Test not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/test/drawing/submit:
+    post:
+      summary: Submit drawing test data
+      description: Submit drawing test data (file upload)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: test_id
+          in: query
+          required: false
+          schema:
+            type: integer
+          description: Test ID (can also be provided in form data)
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - file
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: Drawing file (png, jpg, or jpeg)
+                test_id:
+                  type: integer
+                  description: Test ID (alternative way to provide test_id)
+      responses:
+        '200':
+          description: Drawing test submitted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Drawing test submitted successfully
+                  test_id:
+                    type: integer
+                    example: 123
+                  drawing_score:
+                    type: number
+                    format: float
+                    example: 0.654
+                  ml_results:
+                    $ref: '#/components/schemas/MLResults'
+                  test:
+                    $ref: '#/components/schemas/TestWithProgress'
+        '400':
+          description: Bad request - missing test_id or invalid file
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized - invalid or missing token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Test not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/test/speech/start:
+    post:
+      summary: Start speech test
+      description: Start or get existing speech test
+      security:
+        - bearerAuth: []
+      responses:
+        '201':
+          description: Test started successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Test started successfully
+                  test_id:
+                    type: integer
+                    example: 123
+                  test:
+                    $ref: '#/components/schemas/TestWithProgress'
+        '200':
+          description: Existing test found (user has an incomplete test)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Existing test found
+                  test_id:
+                    type: integer
+                    example: 123
+                  test:
+                    $ref: '#/components/schemas/TestWithProgress'
+        '401':
+          description: Unauthorized - invalid or missing token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/test/speech/status:
+    get:
+      summary: Get speech test status
+      description: Get speech test status
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: test_id
+          in: query
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Speech status retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  test:
+                    $ref: '#/components/schemas/TestWithProgress'
+        '400':
+          description: Bad request - test_id is required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized - invalid or missing token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Test not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/test/speech/submit:
+    post:
+      summary: Submit speech test data
+      description: Submit speech test data (file upload)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: test_id
+          in: query
+          required: false
+          schema:
+            type: integer
+          description: Test ID (can also be provided in form data)
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - file
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: Audio file (mp3, wav, or m4a)
+                test_id:
+                  type: integer
+                  description: Test ID (alternative way to provide test_id)
+      responses:
+        '200':
+          description: Speech test submitted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Speech test submitted successfully
+                  test_id:
+                    type: integer
+                    example: 123
+                  speech_score:
+                    type: number
+                    format: float
+                    example: 0.587
+                  ml_results:
+                    $ref: '#/components/schemas/MLResults'
+                  test:
+                    $ref: '#/components/schemas/TestWithProgress'
+        '400':
+          description: Bad request - missing test_id or invalid file
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized - invalid or missing token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Test not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'

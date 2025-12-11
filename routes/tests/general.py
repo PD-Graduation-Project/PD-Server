@@ -1,4 +1,5 @@
 """General test routes for history and results."""
+
 from flask import request, jsonify, g
 from models.database import db
 from models.test_result import TestResult
@@ -121,3 +122,4 @@ def get_test_history():
             },
         }
     ), 200
+
