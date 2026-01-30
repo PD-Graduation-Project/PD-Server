@@ -7,7 +7,7 @@ from config import Config
 
 auth_bp = Blueprint("auth", __name__, url_prefix="/api/auth")
 
-
+# Todo: add logout and keep state of the jwt tokens in the db to fix having to login multiple times!
 def generate_token(user_id):
     payload = {
         "user_id": user_id,

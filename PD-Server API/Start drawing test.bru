@@ -1,0 +1,142 @@
+meta {
+  name: Start drawing test
+  type: http
+  seq: 11
+}
+
+post {
+  url: {{baseUrl}}/api/test/drawing/start
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+example {
+  name: 200 Response
+  description: Existing test found (user has an incomplete test)
+  
+  request: {
+    url: {{baseUrl}}/api/test/drawing/start
+    method: POST
+    mode: none
+  }
+  
+  response: {
+    headers: {
+      Content-Type: application/json
+    }
+  
+    status: {
+      code: 200
+      text: OK
+    }
+  
+    body: {
+      type: json
+      content: '''
+        {
+          "message": "",
+          "test_id": 0,
+          "test": {
+            "id": 0,
+            "user_id": 0,
+            "tremor_score": 0,
+            "drawing_score": 0,
+            "speech_score": 0,
+            "pd_probability": 0,
+            "created_at": "",
+            "completed_at": "",
+            "progress": {
+              "completed": 0,
+              "total": 0,
+              "percentage": 0
+            },
+            "status": ""
+          }
+        }
+      '''
+    }
+  }
+}
+
+example {
+  name: 201 Response
+  description: Test started successfully
+  
+  request: {
+    url: {{baseUrl}}/api/test/drawing/start
+    method: POST
+    mode: none
+  }
+  
+  response: {
+    headers: {
+      Content-Type: application/json
+    }
+  
+    status: {
+      code: 201
+      text: Created
+    }
+  
+    body: {
+      type: json
+      content: '''
+        {
+          "message": "",
+          "test_id": 0,
+          "test": {
+            "id": 0,
+            "user_id": 0,
+            "tremor_score": 0,
+            "drawing_score": 0,
+            "speech_score": 0,
+            "pd_probability": 0,
+            "created_at": "",
+            "completed_at": "",
+            "progress": {
+              "completed": 0,
+              "total": 0,
+              "percentage": 0
+            },
+            "status": ""
+          }
+        }
+      '''
+    }
+  }
+}
+
+example {
+  name: 401 Response
+  description: Unauthorized - invalid or missing token
+  
+  request: {
+    url: {{baseUrl}}/api/test/drawing/start
+    method: POST
+    mode: none
+  }
+  
+  response: {
+    headers: {
+      Content-Type: application/json
+    }
+  
+    status: {
+      code: 401
+      text: Unauthorized
+    }
+  
+    body: {
+      type: json
+      content: '''
+        {
+          "error": ""
+        }
+      '''
+    }
+  }
+}
