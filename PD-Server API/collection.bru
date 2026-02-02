@@ -7,9 +7,16 @@ auth {
 }
 
 auth:bearer {
-  token: {{token}}
+  token: {{access_token}}
 }
 
 vars:pre-request {
   baseUrl: http://localhost:5000
+}
+
+docs {
+  # Parkinson's Disease Server API
+
+  This collection contains all the available endpoints for the PD-Server API.
+  Most endpoints require authentication. The authentication flow is described in the `Authentication` folder.
 }

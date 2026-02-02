@@ -1,0 +1,87 @@
+meta {
+  name: Get active sessions
+  type: http
+  seq: 7
+}
+
+get {
+  url: {{baseUrl}}/api/auth/sessions
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{access_token}}
+}
+
+example {
+  name: 200 Response
+  description: List of active sessions
+  
+  request: {
+    url: {{baseUrl}}/api/auth/sessions
+    method: GET
+    auth: {
+      mode: bearer
+      token: "your_access_token"
+    }
+  }
+  
+  response: {
+    headers: {
+      Content-Type: application/json
+    }
+  
+    status: {
+      code: 200
+      text: OK
+    }
+  
+    body: {
+      type: json
+      content: '''
+        {
+          "sessions": [
+            {
+              "id": 1,
+              "device_info": "PostmanRuntime/7.29.2",
+              "ip_address": "127.0.0.1",
+              "created_at": "2023-10-27T10:00:00Z",
+              "expires_at": "2023-11-26T10:00:00Z"
+            }
+          ]
+        }
+      '''
+    }
+  }
+}
+
+example {
+  name: 401 Response
+  description: Unauthorized - missing or invalid access token
+  
+  request: {
+    url: {{baseUrl}}/api/auth/sessions
+    method: GET
+  }
+  
+  response: {
+    headers: {
+      Content-Type: application/json
+    }
+  
+    status: {
+      code: 401
+      text: Unauthorized
+    }
+  
+    body: {
+      type: json
+      content: '''
+        {
+          "error": "Access token required"
+        }
+      '''
+    }
+  }
+}

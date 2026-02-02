@@ -1,0 +1,138 @@
+meta {
+  name: Register a new user
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/api/auth/register
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "email": "testing@mail.com",
+    "password": "1234"
+  }
+}
+
+example {
+  name: 201 Response
+  description: User registered successfully
+  
+  request: {
+    url: {{baseUrl}}/api/auth/register
+    method: POST
+    mode: json
+    body:json: {
+      {
+        "email": "",
+        "password": ""
+      }
+    }
+  }
+  
+  response: {
+    headers: {
+      Content-Type: application/json
+    }
+  
+    status: {
+      code: 201
+      text: Created
+    }
+  
+    body: {
+      type: json
+      content: '''
+        {
+          "message": "User registered successfully",
+          "access_token": "your_access_token",
+          "refresh_token": "your_refresh_token",
+          "token_type": "Bearer",
+          "expires_at": 900,
+          "user": {
+            "id": 1,
+            "email": "test@mail.com",
+            "created_at": "2023-10-27T10:00:00Z"
+          }
+        }
+      '''
+    }
+  }
+}
+
+example {
+  name: 400 Response
+  description: Bad request - missing email or password
+  
+  request: {
+    url: {{baseUrl}}/api/auth/register
+    method: POST
+    mode: json
+    body:json: {
+      {
+        "email": "",
+        "password": ""
+      }
+    }
+  }
+  
+  response: {
+    headers: {
+      Content-Type: application/json
+    }
+  
+    status: {
+      code: 400
+      text: Bad Request
+    }
+  
+    body: {
+      type: json
+      content: '''
+        {
+          "error": ""
+        }
+      '''
+    }
+  }
+}
+
+example {
+  name: 409 Response
+  description: Conflict - email already registered
+  
+  request: {
+    url: {{baseUrl}}/api/auth/register
+    method: POST
+    mode: json
+    body:json: {
+      {
+        "email": "",
+        "password": ""
+      }
+    }
+  }
+  
+  response: {
+    headers: {
+      Content-Type: application/json
+    }
+  
+    status: {
+      code: 409
+      text: Conflict
+    }
+  
+    body: {
+      type: json
+      content: '''
+        {
+          "error": ""
+        }
+      '''
+    }
+  }
+}

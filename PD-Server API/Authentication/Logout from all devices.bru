@@ -1,0 +1,79 @@
+meta {
+  name: Logout from all devices
+  type: http
+  seq: 6
+}
+
+post {
+  url: {{baseUrl}}/api/auth/logout-all
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{access_token}}
+}
+
+example {
+  name: 200 Response
+  description: Logged out from all devices successfully
+  
+  request: {
+    url: {{baseUrl}}/api/auth/logout-all
+    method: POST
+    auth: {
+      mode: bearer
+      token: "your_access_token"
+    }
+  }
+  
+  response: {
+    headers: {
+      Content-Type: application/json
+    }
+  
+    status: {
+      code: 200
+      text: OK
+    }
+  
+    body: {
+      type: json
+      content: '''
+        {
+          "message": "Logged out from all devices successfully"
+        }
+      '''
+    }
+  }
+}
+
+example {
+  name: 401 Response
+  description: Unauthorized - missing or invalid access token
+  
+  request: {
+    url: {{baseUrl}}/api/auth/logout-all
+    method: POST
+  }
+  
+  response: {
+    headers: {
+      Content-Type: application/json
+    }
+  
+    status: {
+      code: 401
+      text: Unauthorized
+    }
+  
+    body: {
+      type: json
+      content: '''
+        {
+          "error": "Access token required"
+        }
+      '''
+    }
+  }
+}

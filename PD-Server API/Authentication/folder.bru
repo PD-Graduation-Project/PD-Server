@@ -1,0 +1,20 @@
+meta {
+  name: Authentication
+  seq: 1
+}
+
+auth {
+  mode: inherit
+}
+
+docs {
+  The authentication flow is as follows:
+
+  1. **Register** a new user with an email and password.
+  2. **Login** with the same credentials to receive an `access_token` and a `refresh_token`.
+  3. Use the `access_token` in the `Authorization` header (as a Bearer token) to access protected routes.
+  4. If the `access_token` expires, use the **Refresh token** endpoint with your `refresh_token` to get a new `access_token`.
+  5. When the user wants to logout, use the **Logout user** endpoint to invalidate the `refresh_token`.
+  6. The **Logout from all devices** endpoint invalidates all `refresh_token`s for the current user.
+  7. The **Get active sessions** endpoint retrieves all active sessions for the current user.
+}

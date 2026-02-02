@@ -1,0 +1,125 @@
+meta {
+  name: Refresh token
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{baseUrl}}/api/auth/refresh
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "refresh_token": "your_refresh_token"
+  }
+}
+
+example {
+  name: 200 Response
+  description: Token refreshed successfully
+  
+  request: {
+    url: {{baseUrl}}/api/auth/refresh
+    method: POST
+    mode: json
+    body:json: {
+      {
+        "refresh_token": "your_refresh_token"
+      }
+    }
+  }
+  
+  response: {
+    headers: {
+      Content-Type: application/json
+    }
+  
+    status: {
+      code: 200
+      text: OK
+    }
+  
+    body: {
+      type: json
+      content: '''
+        {
+          "access_token": "new_access_token",
+          "token_type": "Bearer",
+          "expires_in": 900
+        }
+      '''
+    }
+  }
+}
+
+example {
+  name: 400 Response
+  description: Bad request - missing refresh token
+  
+  request: {
+    url: {{baseUrl}}/api/auth/refresh
+    method: POST
+    mode: json
+    body:json: {
+      {}
+    }
+  }
+  
+  response: {
+    headers: {
+      Content-Type: application/json
+    }
+  
+    status: {
+      code: 400
+      text: Bad Request
+    }
+  
+    body: {
+      type: json
+      content: '''
+        {
+          "error": "Refresh token required"
+        }
+      '''
+    }
+  }
+}
+
+example {
+  name: 401 Response
+  description: Unauthorized - invalid or expired refresh token
+  
+  request: {
+    url: {{baseUrl}}/api/auth/refresh
+    method: POST
+    mode: json
+    body:json: {
+      {
+        "refresh_token": "invalid_token"
+      }
+    }
+  }
+  
+  response: {
+    headers: {
+      Content-Type: application/json
+    }
+  
+    status: {
+      code: 401
+      text: Unauthorized
+    }
+  
+    body: {
+      type: json
+      content: '''
+        {
+          "error": "Invalid or expired refresh token"
+        }
+      '''
+    }
+  }
+}
