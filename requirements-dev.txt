@@ -1,0 +1,25 @@
+# Testing Framework
+pytest==7.4.3
+pytest-flask==1.3.0
+pytest-cov==4.1.0
+
+# Test Data Generation
+faker==20.1.0
+
+# Time Mocking
+freezegun==1.4.0
+
+pytest-xdist==3.5.0
+
+# Test Reporting
+pytest-html==4.1.1
+
+# Code Quality
+black==24.1.1        # Code formatting
+flake8==7.0.0        # Linting
+mypy==1.8.0          # Type checking
+isort==5.13.2        # Import sorting
+pre-commit==3.6.0    # Git hooks for code quality
+
+# Coverage Badges
+coverage-badge==1.1.0
