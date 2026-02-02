@@ -1,38 +1,37 @@
 from flask import Flask, jsonify
 from flask_cors import CORS
 from flask_migrate import Migrate
+
 from config import Config
 from models.database import db
 
 
-def create_app():
+def create_app(config_override=None):
     app = Flask(__name__)
     app.config.from_object(Config)
 
+    if config_override:
+        app.config.update(config_override)
+
     # Initialize extensions
     db.init_app(app)
-    migrate = Migrate(app, db)
+    Migrate(app, db)
 
     CORS(app)
 
-    # Import blueprints here to avoid circular imports
     from routes.auth import auth_bp
     from routes.tests import tests_bp
 
-    # Create tables
     with app.app_context():
         db.create_all()
 
-    # Register blueprints (routes)
     app.register_blueprint(auth_bp)
     app.register_blueprint(tests_bp)
 
-    # Health check endpoint
     @app.route("/health", methods=["GET"])
     def health_check():
         return jsonify({"status": "healthy"}), 200
 
-    # Error handlers
     @app.errorhandler(404)
     def not_found(error):
         return jsonify({"error": "Not found"}), 404

@@ -1,12 +1,14 @@
-from flask import Blueprint, request, jsonify
-import jwt
 import datetime
 import secrets
-from models import user
-from models.database import db
-from models.user import User, RefreshToken
+import uuid
+
+import jwt
+from flask import Blueprint, jsonify, request
+from werkzeug.security import check_password_hash, generate_password_hash
+
 from config import Config
-from werkzeug.security import generate_password_hash, check_password_hash
+from models.database import db
+from models.user import RefreshToken, User
 
 auth_bp = Blueprint("auth", __name__, url_prefix="/api/auth")
 
@@ -14,14 +16,15 @@ ACCESS_TOKEN_EXPIRY = datetime.timedelta(minutes=15)
 REFRESH_TOKEN_EXPIRY = datetime.timedelta(days=30)
 
 
-# Todo: add logout and keep state of the jwt tokens in the db to fix having to login multiple times!
 def generate_access_token(user_id):
     """Generate a short-lived access token"""
+    now = datetime.datetime.now(datetime.timezone.utc)
     payload = {
         "user_id": user_id,
         "type": "access",
-        "exp": datetime.datetime.now(datetime.timezone.utc) + ACCESS_TOKEN_EXPIRY,
-        "iat": datetime.datetime.now(datetime.timezone.utc),  # initilization time
+        "exp": now + ACCESS_TOKEN_EXPIRY,
+        "iat": now,  # initilization time
+        "jti": str(uuid.uuid4()),
     }
     return jwt.encode(payload, Config.JWT_SECRET_KEY, algorithm=Config.JWT_ALGORITHM)
 
@@ -70,7 +73,7 @@ def verify_refresh_token(token):
     try:
         # Query all non-revoked, non-expired refresh tokens
         valid_tokens = RefreshToken.query.filter(
-            RefreshToken.revoked == False,
+            RefreshToken.revoked is False,
             RefreshToken.expires_at > datetime.datetime.utcnow(),
         ).all()
 
@@ -116,7 +119,7 @@ def register():
                 "access_token": access_token,
                 "refresh_token": refresh_token,
                 "token_type": "Bearer",
-                "expires_at": int(ACCESS_TOKEN_EXPIRY.total_seconds()),
+                "expires_in": int(ACCESS_TOKEN_EXPIRY.total_seconds()),
                 "user": user.to_dict(),
             }
         ),
@@ -181,7 +184,7 @@ def refresh():
     # Generate new access token
     access_token = generate_access_token(user_id)
 
-    # Optionally rotate refresh token (recommended for security)
+    # Optionally rotate refresh token
     # For now, we'll keep the same refresh token
 
     return (
