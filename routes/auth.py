@@ -23,7 +23,7 @@ def generate_access_token(user_id):
         "user_id": user_id,
         "type": "access",
         "exp": now + ACCESS_TOKEN_EXPIRY,
-        "iat": now,  # initilization time
+        "iat": now,
         "jti": str(uuid.uuid4()),
     }
     return jwt.encode(payload, Config.JWT_SECRET_KEY, algorithm=Config.JWT_ALGORITHM)
