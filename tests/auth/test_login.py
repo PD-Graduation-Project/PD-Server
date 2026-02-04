@@ -15,7 +15,7 @@ class TestLogin:
         data = response.get_json()
 
         # Check response structure
-        assert data["message"] == "Login successful"
+        assert data["message"] == "Success"
         assert "access_token" in data
         assert "refresh_token" in data
         assert "user" in data
@@ -31,7 +31,7 @@ class TestLogin:
         assert response.status_code == 401
         data = response.get_json()
         assert "error" in data
-        assert "Invalid email or password" in data["error"]
+        assert "Invalid credentials" in data["error"]
 
     def test_login_invalid_password(self, client, test_user):
         """Test login fails with wrong password"""
@@ -42,7 +42,7 @@ class TestLogin:
 
         assert response.status_code == 401
         data = response.get_json()
-        assert "Invalid email or password" in data["error"]
+        assert "Invalid credentials" in data["error"]
 
     def test_login_missing_credentials(self, client):
         """Test login fails without credentials"""

@@ -30,7 +30,9 @@ class TestRefresh:
         assert response.status_code == 400
         data = response.get_json()
         assert "error" in data
-        assert "Refresh token required" in data["error"]
+        assert "'refresh_token': ['Missing data for required field.']" in str(
+            data["error"]
+        )
 
     def test_refresh_invalid_token(self, client, auth_tokens):
         """Test refresh fails with invalid token"""

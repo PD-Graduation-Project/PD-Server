@@ -16,7 +16,7 @@ class TestRegister:
 
         # Check response structure
         assert "message" in data
-        assert data["message"] == "User registered successfully"
+        assert data["message"] == "Success"
         assert "access_token" in data
         assert "refresh_token" in data
         assert "token_type" in data
@@ -45,7 +45,7 @@ class TestRegister:
         assert response.status_code == 400
         data = response.get_json()
         assert "error" in data
-        assert "Email and password required" in data["error"]
+        assert "'email': ['Missing data for required field.']" in str(data["error"])
 
     def test_register_missing_password(self, client):
         """Test registration fails without password"""
