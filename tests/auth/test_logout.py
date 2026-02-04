@@ -6,8 +6,11 @@ class TestLogout:
 
     def test_logout_success(self, client, auth_tokens, db_session):
         """Test successful logout"""
+        headers = {"Authorization": f"Bearer {auth_tokens['access_token']}"}
         response = client.post(
-            "/api/auth/logout", json={"refresh_token": auth_tokens["refresh_token"]}
+            "/api/auth/logout",
+            json={"refresh_token": auth_tokens["refresh_token"]},
+            headers=headers,
         )
 
         assert response.status_code == 200
@@ -17,34 +20,41 @@ class TestLogout:
 
         # Verify token was revoked in database
         refresh_tokens = RefreshToken.query.filter_by(
-            user_id=auth_tokens["user"].id, revoked=False
+            user_id=auth_tokens["user"].id, revoked=True
         ).all()
-        assert len(refresh_tokens) == 0
+        assert len(refresh_tokens) == 1
 
     def test_logout_prevents_future_refresh(self, client, auth_tokens):
         """Test cannot refresh after logout"""
+        headers = {"Authorization": f"Bearer {auth_tokens['access_token']}"}
         # Logout
         response = client.post(
-            "/api/auth/logout", json={"refresh_token": auth_tokens["refresh_token"]}
+            "/api/auth/logout",
+            json={"refresh_token": auth_tokens["refresh_token"]},
+            headers=headers,
         )
         assert response.status_code == 200
 
         # Try to refresh with revoked token
         response = client.post(
-            "/api/auth/refresh", json={"refresh_token": auth_tokens["refresh_token"]}
+            "/api/auth/refresh",
+            json={"refresh_token": auth_tokens["refresh_token"]},
+            headers=headers,
         )
         assert response.status_code == 401
 
-    def test_logout_missing_token(self, client):
+    def test_logout_missing_token(self, client, auth_tokens):
         """Test logout fails without token"""
-        response = client.post("/api/auth/logout", json={})
+        headers = {"Authorization": f"Bearer {auth_tokens['access_token']}"}
+        response = client.post("/api/auth/logout", json={}, headers=headers)
 
         assert response.status_code == 400
 
-    def test_logout_invalid_token(self, client):
+    def test_logout_invalid_token(self, client, auth_tokens):
         """Test logout with invalid token"""
+        headers = {"Authorization": f"Bearer {auth_tokens['access_token']}"}
         response = client.post(
-            "/api/auth/logout", json={"refresh_token": "invalid_token"}
+            "/api/auth/logout", json={"refresh_token": "invalid_token"}, headers=headers
         )
 
         assert response.status_code == 401
@@ -56,21 +66,33 @@ class TestLogout:
             "/api/auth/login",
             json={"email": "test@example.com", "password": "password123"},
         )
-        token1 = response1.get_json()["refresh_token"]
+        token1_data = response1.get_json()
+        token1 = token1_data["refresh_token"]
+        access_token1 = token1_data["access_token"]
 
         response2 = client.post(
             "/api/auth/login",
             json={"email": "test@example.com", "password": "password123"},
         )
-        token2 = response2.get_json()["refresh_token"]
+        token2_data = response2.get_json()
+        token2 = token2_data["refresh_token"]
+        access_token2 = token2_data["access_token"]
 
         # Logout from session 1
-        client.post("/api/auth/logout", json={"refresh_token": token1})
+        headers1 = {"Authorization": f"Bearer {access_token1}"}
+        client.post(
+            "/api/auth/logout", json={"refresh_token": token1}, headers=headers1
+        )
 
         # Session 1 should be invalid
-        response = client.post("/api/auth/refresh", json={"refresh_token": token1})
+        response = client.post(
+            "/api/auth/refresh", json={"refresh_token": token1}, headers=headers1
+        )
         assert response.status_code == 401
 
         # Session 2 should still work
-        response = client.post("/api/auth/refresh", json={"refresh_token": token2})
+        headers2 = {"Authorization": f"Bearer {access_token2}"}
+        response = client.post(
+            "/api/auth/refresh", json={"refresh_token": token2}, headers=headers2
+        )
         assert response.status_code == 200

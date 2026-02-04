@@ -26,8 +26,11 @@ class TestTokenExpiration:
 
     def test_refresh_token_long_lived(self, client, auth_tokens):
         """Test refresh token has longer expiration than access token"""
+        headers = {"Authorization": f"Bearer {auth_tokens['access_token']}"}
         # Refresh token should still work (not expired within test)
         response = client.post(
-            "/api/auth/refresh", json={"refresh_token": auth_tokens["refresh_token"]}
+            "/api/auth/refresh",
+            json={"refresh_token": auth_tokens["refresh_token"]},
+            headers=headers,
         )
         assert response.status_code == 200

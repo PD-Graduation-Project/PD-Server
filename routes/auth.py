@@ -1,32 +1,18 @@
 import datetime
 import secrets
-import uuid
 
-import jwt
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, g, jsonify, request
 from werkzeug.security import check_password_hash, generate_password_hash
 
-from config import Config
+from middleware.authenticate import authenticate
 from models.database import db
 from models.user import RefreshToken, User
+from utils.token import generate_access_token
 
 auth_bp = Blueprint("auth", __name__, url_prefix="/api/auth")
 
 ACCESS_TOKEN_EXPIRY = datetime.timedelta(minutes=15)
 REFRESH_TOKEN_EXPIRY = datetime.timedelta(days=30)
-
-
-def generate_access_token(user_id):
-    """Generate a short-lived access token"""
-    now = datetime.datetime.now(datetime.timezone.utc)
-    payload = {
-        "user_id": user_id,
-        "type": "access",
-        "exp": now + ACCESS_TOKEN_EXPIRY,
-        "iat": now,
-        "jti": str(uuid.uuid4()),
-    }
-    return jwt.encode(payload, Config.JWT_SECRET_KEY, algorithm=Config.JWT_ALGORITHM)
 
 
 def generate_refresh_token(user_id, device_info=None, ip_address=None):
@@ -50,30 +36,12 @@ def generate_refresh_token(user_id, device_info=None, ip_address=None):
     return token
 
 
-def verify_access_token(token):
-    """Verify and decode access token"""
-    try:
-        payload = jwt.decode(
-            token, Config.JWT_SECRET_KEY, algorithms=[Config.JWT_ALGORITHM]
-        )
-
-        # Ensure it's an access token
-        if payload.get("type") != "access":
-            return None
-
-        return payload["user_id"]
-    except jwt.ExpiredSignatureError:
-        return None
-    except jwt.InvalidTokenError:
-        return None
-
-
 def verify_refresh_token(token):
     """Verify refresh token against database"""
     try:
         # Query all non-revoked, non-expired refresh tokens
         valid_tokens = RefreshToken.query.filter(
-            RefreshToken.revoked is False,
+            RefreshToken.revoked.is_(False),
             RefreshToken.expires_at > datetime.datetime.utcnow(),
         ).all()
 
@@ -163,6 +131,7 @@ def login():
 
 
 @auth_bp.route("/refresh", methods=["POST"])
+@authenticate
 def refresh():
     """
     Use refresh token to get a new access token
@@ -200,6 +169,7 @@ def refresh():
 
 
 @auth_bp.route("/logout", methods=["POST"])
+@authenticate
 def logout():
     """
     Logout user by revoking their refresh token
@@ -215,7 +185,7 @@ def logout():
     # Verify and revoke refresh token
     user_id, db_token = verify_refresh_token(refresh_token)
 
-    if db_token:
+    if db_token and db_token.user_id == g.user_id:
         db_token.revoked = True
         db.session.commit()
         return jsonify({"message": "Logged out successfully"}), 200
@@ -224,25 +194,14 @@ def logout():
 
 
 @auth_bp.route("/logout-all", methods=["POST"])
+@authenticate
 def logout_all():
     """
     Logout from all devices by revoking all refresh tokens for the user
     Requires valid access token in Authorization header
     """
-    # Get access token from header
-    auth_header = request.headers.get("Authorization")
-
-    if not auth_header or not auth_header.startswith("Bearer "):
-        return jsonify({"error": "Access token required"}), 401
-
-    access_token = auth_header.replace("Bearer ", "")
-    user_id = verify_access_token(access_token)
-
-    if not user_id:
-        return jsonify({"error": "Invalid or expired access token"}), 401
-
     # Revoke all refresh tokens for this user
-    RefreshToken.query.filter_by(user_id=user_id, revoked=False).update(
+    RefreshToken.query.filter_by(user_id=g.user_id, revoked=False).update(
         {"revoked": True}
     )
     db.session.commit()
@@ -251,26 +210,16 @@ def logout_all():
 
 
 @auth_bp.route("/sessions", methods=["GET"])
+@authenticate
 def get_sessions():
     """
     Get all active sessions (refresh tokens) for the current user
     Requires valid access token in Authorization header
     """
-    # Get access token from header
-    auth_header = request.headers.get("Authorization")
-
-    if not auth_header or not auth_header.startswith("Bearer "):
-        return jsonify({"error": "Access token required"}), 401
-
-    access_token = auth_header.replace("Bearer ", "")
-    user_id = verify_access_token(access_token)
-
-    if not user_id:
-        return jsonify({"error": "Invalid or expired access token"}), 401
 
     # Get all active refresh tokens
     sessions = (
-        RefreshToken.query.filter_by(user_id=user_id, revoked=False)
+        RefreshToken.query.filter_by(user_id=g.user_id, revoked=False)
         .filter(RefreshToken.expires_at > datetime.datetime.utcnow())
         .all()
     )

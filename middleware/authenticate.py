@@ -1,5 +1,6 @@
-from flask import request, jsonify, g
-from routes.auth import verify_access_token
+from flask import g, jsonify, request
+
+from utils.token import verify_access_token
 
 
 def authenticate(fn):

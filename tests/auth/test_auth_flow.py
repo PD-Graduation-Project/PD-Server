@@ -13,11 +13,14 @@ class TestAuthenticationFlow:
             json={"email": "flow@example.com", "password": "testpass123"},
         )
         assert response.status_code == 201
-        refresh_token = response.get_json()["refresh_token"]
+        response_data = response.get_json()
+        refresh_token = response_data["refresh_token"]
+        access_token = response_data["access_token"]
 
         # 2. Refresh token
+        headers = {"Authorization": f"Bearer {access_token}"}
         response = client.post(
-            "/api/auth/refresh", json={"refresh_token": refresh_token}
+            "/api/auth/refresh", json={"refresh_token": refresh_token}, headers=headers
         )
         assert response.status_code == 200
         new_access_token = response.get_json()["access_token"]
@@ -29,13 +32,13 @@ class TestAuthenticationFlow:
 
         # 4. Logout
         response = client.post(
-            "/api/auth/logout", json={"refresh_token": refresh_token}
+            "/api/auth/logout", json={"refresh_token": refresh_token}, headers=headers
         )
         assert response.status_code == 200
 
         # 5. Cannot refresh after logout
         response = client.post(
-            "/api/auth/refresh", json={"refresh_token": refresh_token}
+            "/api/auth/refresh", json={"refresh_token": refresh_token}, headers=headers
         )
         assert response.status_code == 401
 
@@ -56,25 +59,36 @@ class TestAuthenticationFlow:
 
         # All tokens should work
         for token_data in tokens:
+            headers = {"Authorization": f"Bearer {token_data['access_token']}"}
             response = client.post(
-                "/api/auth/refresh", json={"refresh_token": token_data["refresh_token"]}
+                "/api/auth/refresh",
+                json={"refresh_token": token_data["refresh_token"]},
+                headers=headers,
             )
             assert response.status_code == 200
 
         # Logout from one device
+        headers = {"Authorization": f"Bearer {tokens[0]['access_token']}"}
         client.post(
-            "/api/auth/logout", json={"refresh_token": tokens[0]["refresh_token"]}
+            "/api/auth/logout",
+            json={"refresh_token": tokens[0]["refresh_token"]},
+            headers=headers,
         )
 
         # First token should fail
         response = client.post(
-            "/api/auth/refresh", json={"refresh_token": tokens[0]["refresh_token"]}
+            "/api/auth/refresh",
+            json={"refresh_token": tokens[0]["refresh_token"]},
+            headers=headers,
         )
         assert response.status_code == 401
 
         # Other tokens should still work
         for token_data in tokens[1:]:
+            headers = {"Authorization": f"Bearer {token_data['access_token']}"}
             response = client.post(
-                "/api/auth/refresh", json={"refresh_token": token_data["refresh_token"]}
+                "/api/auth/refresh",
+                json={"refresh_token": token_data["refresh_token"]},
+                headers=headers,
             )
             assert response.status_code == 200
