@@ -1,44 +1,34 @@
-# schemas/questionnaire_schema.py
-from marshmallow import INCLUDE, Schema, fields, validate
+from marshmallow import EXCLUDE, Schema, fields, validate
 
 
-class QuestionnaireResponseSchema(Schema):
+class QuestionnaireItemSchema(Schema):
     class Meta:
-        unknown = INCLUDE
+        unknown = EXCLUDE  # Ignore extra fields in the item object
 
-    Q01 = fields.Boolean(required=False, allow_none=True)
-    Q02 = fields.Boolean(required=False, allow_none=True)
-    Q03 = fields.Boolean(required=False, allow_none=True)
-    Q04 = fields.Boolean(required=False, allow_none=True)
-    Q05 = fields.Boolean(required=False, allow_none=True)
-    Q06 = fields.Boolean(required=False, allow_none=True)
-    Q07 = fields.Boolean(required=False, allow_none=True)
-    Q08 = fields.Boolean(required=False, allow_none=True)
-    Q09 = fields.Boolean(required=False, allow_none=True)
-    Q10 = fields.Boolean(required=False, allow_none=True)
-    Q11 = fields.Boolean(required=False, allow_none=True)
-    Q12 = fields.Boolean(required=False, allow_none=True)
-    Q13 = fields.Boolean(required=False, allow_none=True)
-    Q14 = fields.Boolean(required=False, allow_none=True)
-    Q15 = fields.Boolean(required=False, allow_none=True)
-    Q16 = fields.Boolean(required=False, allow_none=True)
-    Q17 = fields.Boolean(required=False, allow_none=True)
-    Q18 = fields.Boolean(required=False, allow_none=True)
-    Q19 = fields.Boolean(required=False, allow_none=True)
-    Q20 = fields.Boolean(required=False, allow_none=True)
-    Q21 = fields.Boolean(required=False, allow_none=True)
-    Q22 = fields.Boolean(required=False, allow_none=True)
-    Q23 = fields.Boolean(required=False, allow_none=True)
-    Q24 = fields.Boolean(required=False, allow_none=True)
-    Q25 = fields.Boolean(required=False, allow_none=True)
-    Q26 = fields.Boolean(required=False, allow_none=True)
-    Q27 = fields.Boolean(required=False, allow_none=True)
-    Q28 = fields.Boolean(required=False, allow_none=True)
+    link_id = fields.String(required=True)
+    answer = fields.Boolean(required=False, allow_none=True)
 
 
 class QuestionnaireBulkSchema(Schema):
     resource_type = fields.String(
         required=True, validate=validate.Equal("questionnaire_response")
     )
-    # Validate that 'item' is a list of dictionaries
-    item = fields.List(fields.Dict(), required=True)
+    # Use Nested validation to ensure every item has link_id and answer
+    item = fields.List(fields.Nested(QuestionnaireItemSchema), required=True)
+
+
+class QuestionnaireResponseSchema(Schema):
+    class Meta:
+        # Use EXCLUDE to prevent typos (like "QQ01") from being silently accepted
+        unknown = EXCLUDE
+
+
+# Dynamically add Q01-Q28 fields to the class
+# This loop creates: Q01 = fields.Boolean(...), Q02 = fields.Boolean(...)
+for i in range(1, 29):
+    field_name = f"Q{i:02d}"
+    setattr(
+        QuestionnaireResponseSchema,
+        field_name,
+        fields.Boolean(required=False, allow_none=True),
+    )
