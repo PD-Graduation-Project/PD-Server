@@ -19,7 +19,7 @@ def create_app(config_override=None):
 
     CORS(app)
 
-    from routes.auth import auth_bp
+    from routes.auth_routes import auth_bp
     from routes.tests import tests_bp
 
     with app.app_context():
