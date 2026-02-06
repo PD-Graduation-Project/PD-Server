@@ -20,13 +20,17 @@ def create_app(config_override=None):
     CORS(app)
 
     from routes.auth_routes import auth_bp
+    from routes.questionnaire_routes import questionnaire_bp
     from routes.tests import tests_bp
+    from routes.user_routes import user_bp
 
     with app.app_context():
         db.create_all()
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(tests_bp)
+    app.register_blueprint(user_bp)
+    app.register_blueprint(questionnaire_bp)
 
     @app.route("/health", methods=["GET"])
     def health_check():

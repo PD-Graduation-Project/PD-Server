@@ -1,20 +1,4 @@
-from marshmallow import EXCLUDE, Schema, fields, validate
-
-
-class QuestionnaireItemSchema(Schema):
-    class Meta:
-        unknown = EXCLUDE  # Ignore extra fields in the item object
-
-    link_id = fields.String(required=True)
-    answer = fields.Boolean(required=False, allow_none=True)
-
-
-class QuestionnaireBulkSchema(Schema):
-    resource_type = fields.String(
-        required=True, validate=validate.Equal("questionnaire_response")
-    )
-    # Use Nested validation to ensure every item has link_id and answer
-    item = fields.List(fields.Nested(QuestionnaireItemSchema), required=True)
+from marshmallow import EXCLUDE, Schema, fields
 
 
 class QuestionnaireResponseSchema(Schema):
