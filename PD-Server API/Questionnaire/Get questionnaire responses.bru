@@ -1,0 +1,90 @@
+meta {
+  name: Get questionnaire responses
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/questionnaire
+  auth: inherit
+}
+
+example {
+  name: 200 Response
+  description: Questionnaire responses retrieved successfully
+
+  response: {
+    headers: {
+      Content-Type: application/json
+    }
+
+    status: {
+      code: 200
+      text: OK
+    }
+
+    body: {
+      type: json
+      content: '''
+        {
+          "success": true,
+          "data": {
+            "Q01": true,
+            "Q02": false,
+            "Q03": true,
+            "Q04": null,
+            "Q05": false,
+            "Q06": true,
+            "Q07": null,
+            "Q08": false,
+            "Q09": true,
+            "Q10": null,
+            "Q11": false,
+            "Q12": true,
+            "Q13": null,
+            "Q14": false,
+            "Q15": true,
+            "Q16": null,
+            "Q17": false,
+            "Q18": true,
+            "Q19": null,
+            "Q20": false,
+            "Q21": true,
+            "Q22": null,
+            "Q23": false,
+            "Q24": true,
+            "Q25": null,
+            "Q26": false,
+            "Q27": true,
+            "Q28": null
+          }
+        }
+      '''
+    }
+  }
+}
+
+example {
+  name: 404 Response
+  description: User not found
+
+  response: {
+    headers: {
+      Content-Type: application/json
+    }
+
+    status: {
+      code: 404
+      text: Not Found
+    }
+
+    body: {
+      type: json
+      content: '''
+        {
+          "error": "User not found"
+        }
+      '''
+    }
+  }
+}

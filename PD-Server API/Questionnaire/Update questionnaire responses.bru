@@ -1,0 +1,148 @@
+meta {
+  name: Update questionnaire responses
+  type: http
+  seq: 2
+}
+
+patch {
+  url: {{baseUrl}}/api/questionnaire
+  auth: inherit
+  body: json
+}
+
+body:json {
+  {
+    "Q01": true,
+    "Q05": false,
+    "Q10": true
+  }
+}
+
+example {
+  name: 200 Response
+  description: Questionnaire updated successfully
+
+  response: {
+    headers: {
+      Content-Type: application/json
+    }
+
+    status: {
+      code: 200
+      text: OK
+    }
+
+    body: {
+      type: json
+      content: '''
+        {
+          "success": true,
+          "updated": ["Q01", "Q05", "Q10"]
+        }
+      '''
+    }
+  }
+}
+
+example {
+  name: 400 Response - No data
+  description: Bad request - no data provided
+
+  response: {
+    headers: {
+      Content-Type: application/json
+    }
+
+    status: {
+      code: 400
+      text: Bad Request
+    }
+
+    body: {
+      type: json
+      content: '''
+        {
+          "success": false,
+          "error": "No data"
+        }
+      '''
+    }
+  }
+}
+
+example {
+  name: 400 Response - Invalid field
+  description: Bad request - invalid question ID
+
+  response: {
+    headers: {
+      Content-Type: application/json
+    }
+
+    status: {
+      code: 400
+      text: Bad Request
+    }
+
+    body: {
+      type: json
+      content: '''
+        {
+          "success": false,
+          "error": "Q29 must be boolean"
+        }
+      '''
+    }
+  }
+}
+
+example {
+  name: 400 Response - No valid fields
+  description: Bad request - no valid fields provided
+
+  response: {
+    headers: {
+      Content-Type: application/json
+    }
+
+    status: {
+      code: 400
+      text: Bad Request
+    }
+
+    body: {
+      type: json
+      content: '''
+        {
+          "success": false,
+          "error": "No valid fields provided"
+        }
+      '''
+    }
+  }
+}
+
+example {
+  name: 404 Response
+  description: User not found
+
+  response: {
+    headers: {
+      Content-Type: application/json
+    }
+
+    status: {
+      code: 404
+      text: Not Found
+    }
+
+    body: {
+      type: json
+      content: '''
+        {
+          "error": "User not found"
+        }
+      '''
+    }
+  }
+}

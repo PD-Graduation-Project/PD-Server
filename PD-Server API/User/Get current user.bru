@@ -1,0 +1,71 @@
+meta {
+  name: Get current user
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/user
+  auth: inherit
+}
+
+example {
+  name: 200 Response
+  description: User retrieved successfully
+
+  response: {
+    headers: {
+      Content-Type: application/json
+    }
+
+    status: {
+      code: 200
+      text: OK
+    }
+
+    body: {
+      type: json
+      content: '''
+        {
+          "success": true,
+          "data": {
+            "id": 1,
+            "email": "user@example.com",
+            "age": 25,
+            "height": 175,
+            "weight": 70,
+            "gender": "male",
+            "pd_appearance_in_kinship": false,
+            "pd_appearance_in_first_grade_kinship": false,
+            "created_at": "2023-10-27T10:00:00Z"
+          }
+        }
+      '''
+    }
+  }
+}
+
+example {
+  name: 404 Response
+  description: User not found
+
+  response: {
+    headers: {
+      Content-Type: application/json
+    }
+
+    status: {
+      code: 404
+      text: Not Found
+    }
+
+    body: {
+      type: json
+      content: '''
+        {
+          "error": "User not found"
+        }
+      '''
+    }
+  }
+}

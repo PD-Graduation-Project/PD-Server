@@ -1,0 +1,87 @@
+meta {
+  name: Delete user account
+  type: http
+  seq: 4
+}
+
+delete {
+  url: {{baseUrl}}/api/user
+  auth: inherit
+}
+
+example {
+  name: 200 Response
+  description: Account deleted successfully
+
+  response: {
+    headers: {
+      Content-Type: application/json
+    }
+
+    status: {
+      code: 200
+      text: OK
+    }
+
+    body: {
+      type: json
+      content: '''
+        {
+          "success": true,
+          "message": "Account deleted"
+        }
+      '''
+    }
+  }
+}
+
+example {
+  name: 404 Response
+  description: User not found
+
+  response: {
+    headers: {
+      Content-Type: application/json
+    }
+
+    status: {
+      code: 404
+      text: Not Found
+    }
+
+    body: {
+      type: json
+      content: '''
+        {
+          "error": "User not found"
+        }
+      '''
+    }
+  }
+}
+
+example {
+  name: 500 Response
+  description: Internal server error
+
+  response: {
+    headers: {
+      Content-Type: application/json
+    }
+
+    status: {
+      code: 500
+      text: Internal Server Error
+    }
+
+    body: {
+      type: json
+      content: '''
+        {
+          "success": false,
+          "error": "Database error"
+        }
+      '''
+    }
+  }
+}
