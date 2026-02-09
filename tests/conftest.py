@@ -4,6 +4,7 @@ import pytest
 
 from app import create_app  # Adjust import based on your app structure
 from models.database import db
+from models.test_models import TestInput, TestSession
 from models.user import RefreshToken, User
 
 
@@ -53,15 +54,17 @@ def db_session(app):
     Automatically rolls back after each test
     """
     with app.app_context():
-        # Clear all data
+        TestInput.query.delete()
+        TestSession.query.delete()
         RefreshToken.query.delete()
         User.query.delete()
         db.session.commit()
 
         yield db.session
 
-        # Cleanup after test
         db.session.rollback()
+        TestInput.query.delete()
+        TestSession.query.delete()
         RefreshToken.query.delete()
         User.query.delete()
         db.session.commit()

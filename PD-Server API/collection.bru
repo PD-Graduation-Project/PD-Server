@@ -18,5 +18,25 @@ docs {
   # Parkinson's Disease Server API
 
   This collection contains all the available endpoints for the PD-Server API.
-  Most endpoints require authentication. The authentication flow is described in the `Authentication` folder.
+
+  ## Authentication Flow
+  1. Register: `POST /api/auth/register`
+  2. Login: `POST /api/auth/login` (returns access_token and refresh_token)
+  3. Use `access_token` in requests (Bearer auth)
+
+  ## Folders
+  - **Authentication**: Register, login, refresh, logout, sessions
+  - **Tests**: Create and manage test sessions (tremor, drawing, voice)
+  - **ESP32 Devices**: Pair and manage ESP32 tremor sensors
+  - **User**: User demographics and profile
+  - **Questionnaire**: Q01-Q28 questionnaire responses
+
+  ## Environment
+  - Use `Local development server` environment for localhost:5000
+}
+
+vars:pre-request {
+  baseUrl: http://localhost:5000
+  access_token=
+  refresh_token=
 }

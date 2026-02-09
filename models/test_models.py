@@ -13,6 +13,7 @@ class TestSession(db.Model):
         db.String(20), nullable=False, default="pending"
     )  # pending, running, finished
     device_source = db.Column(db.String(20), nullable=True)
+    config = db.Column(db.JSON, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     completed_at = db.Column(db.DateTime, nullable=True)
     ml_score = db.Column(db.Float, nullable=True)
