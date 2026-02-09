@@ -1,0 +1,141 @@
+meta {
+  name: Upload tremor gyro file
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{baseUrl}}/api/tests/1/tremor
+  body: none
+  auth: inherit
+}
+
+headers {
+  X-Device-API-Key: {{esp32_api_key}}
+}
+
+docs {
+  # Upload Tremor Gyro File
+
+  Upload a gyro TXT file for a tremor test.
+
+  ## Authentication
+  Use `X-Device-API-Key` header for ESP32 authentication.
+
+  ## Request Body (multipart/form-data)
+  - `file`: TXT file containing gyro data
+  - `subtest`: Subtest name (0-10)
+  - `hand`: Hand (l or r)
+
+  ## Filename Generated
+  Server generates: `{test_id}_{subtest}_{hand}.txt`
+  Example: `1_0_l.txt`
+}
+
+example {
+  name: 200 OK - Success
+  description: Successfully uploaded gyro file
+
+  request: {
+    url: {{baseUrl}}/api/tests/1/tremor
+    method: POST
+    mode: multipart
+    body:multipart: {
+      {
+        "file": "",
+        "subtest": "0",
+        "hand": "l"
+      }
+    }
+  }
+
+  response: {
+    headers: {
+      Content-Type: application/json
+    }
+
+    status: {
+      code: 200
+      text: OK
+    }
+
+    body: {
+      type: json
+      content: '''
+        {
+          "success": true,
+          "data": {
+            "id": 1,
+            "input_type": "tremor_gyro",
+            "subtest": "0",
+            "hand": "l",
+            "file_path": "/uploads/tremor/1/1_0_l.txt"
+          }
+        }
+      '''
+    }
+  }
+}
+
+example {
+  name: 400 Bad Request
+  description: Invalid subtest or hand
+
+  request: {
+    url: {{baseUrl}}/api/tests/1/tremor
+    method: POST
+    mode: multipart
+    body:multipart: {
+      {
+        "file": "",
+        "subtest": "invalid",
+        "hand": "l"
+      }
+    }
+  }
+
+  response: {
+    headers: {
+      Content-Type: application/json
+    }
+
+    status: {
+      code: 400
+      text: Bad Request
+    }
+
+    body: {
+      type: json
+      content: '''
+        {
+          "error": "Invalid subtest: invalid"
+        }
+      '''
+    }
+  }
+}
+
+example {
+  name: 401 Unauthorized
+  description: Missing or invalid API key
+
+  response: {
+    headers: {
+      Content-Type: application/json
+    }
+
+    status: {
+      code: 401
+      text: Unauthorized
+    }
+
+    body: {
+      type: json
+      content: '''
+        {
+          "error": "..."
+        }
+      '''
+    }
+  }
+}

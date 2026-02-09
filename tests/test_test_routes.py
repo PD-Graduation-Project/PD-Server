@@ -99,7 +99,7 @@ class TestCreateTest:
             "/api/tests",
             json={
                 "test_type": "tremor",
-                "config": {"step_1a": True, "step_2": False, "step_10": True},
+                "config": {"step_0": True, "step_2": False, "step_10": True},
             },
             headers=auth_headers,
         )
@@ -123,7 +123,7 @@ class TestCreateTest:
             json={
                 "test_type": "tremor",
                 "device": "esp32",
-                "config": {"step_1a": True},
+                "config": {"step_0": True},
             },
             headers=auth_headers,
         )

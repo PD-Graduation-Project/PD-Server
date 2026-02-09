@@ -22,12 +22,14 @@ def create_app(config_override=None):
     from routes.auth_routes import auth_bp
     from routes.questionnaire_routes import questionnaire_bp
     from routes.test_routes import test_bp
+    from routes.upload_routes import upload_bp
     from routes.user_routes import user_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(user_bp)
     app.register_blueprint(questionnaire_bp)
     app.register_blueprint(test_bp)
+    app.register_blueprint(upload_bp)
 
     @app.route("/health", methods=["GET"])
     def health_check():

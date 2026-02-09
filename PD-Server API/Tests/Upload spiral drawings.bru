@@ -1,0 +1,99 @@
+meta {
+  name: Upload spiral drawings
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{baseUrl}}/api/tests/2/drawings
+  body: none
+  auth: inherit
+}
+
+docs {
+  # Upload Spiral Drawings
+
+  Upload two spiral drawing images (left and right hand).
+
+  ## Request Body (multipart/form-data)
+  - `spiral_left`: Image file (PNG/JPG)
+  - `spiral_right`: Image file (PNG/JPG)
+}
+
+example {
+  name: 200 OK - Success
+  description: Successfully uploaded both spiral drawings
+
+  request: {
+    url: {{baseUrl}}/api/tests/2/drawings
+    method: POST
+    mode: multipart
+    body:multipart: {
+      {
+        "spiral_left": "",
+        "spiral_right": ""
+      }
+    }
+  }
+
+  response: {
+    headers: {
+      Content-Type: application/json
+    }
+
+    status: {
+      code: 200
+      text: OK
+    }
+
+    body: {
+      type: json
+      content: '''
+        {
+          "success": true,
+          "data": {
+            "inputs": [
+              {
+                "id": 10,
+                "input_type": "drawing_spiral",
+                "hand": "l",
+                "file_path": "/uploads/drawing/2/spiral_left.png"
+              },
+              {
+                "id": 11,
+                "input_type": "drawing_spiral",
+                "hand": "r",
+                "file_path": "/uploads/drawing/2/spiral_right.png"
+              }
+            ]
+          }
+        }
+      '''
+    }
+  }
+}
+
+example {
+  name: 400 Bad Request
+  description: Missing one of the required files
+
+  response: {
+    headers: {
+      Content-Type: application/json
+    }
+
+    status: {
+      code: 400
+      text: Bad Request
+    }
+
+    body: {
+      type: json
+      content: '''
+        {
+          "error": "Both spiral_left and spiral_right files required"
+        }
+      '''
+    }
+  }
+}

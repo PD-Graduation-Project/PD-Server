@@ -1,0 +1,86 @@
+meta {
+  name: Upload voice recording
+  type: http
+  seq: 6
+}
+
+post {
+  url: {{baseUrl}}/api/tests/3/voice
+  body: none
+  auth: inherit
+}
+
+docs {
+  # Upload Voice Recording
+
+  Upload an audio recording for a voice test.
+
+  ## Request Body (multipart/form-data)
+  - `audio`: Audio file (WAV/MP3/M4A)
+}
+
+example {
+  name: 200 OK - Success
+  description: Successfully uploaded voice recording
+
+  request: {
+    url: {{baseUrl}}/api/tests/3/voice
+    method: POST
+    mode: multipart
+    body:multipart: {
+      {
+        "audio": ""
+      }
+    }
+  }
+
+  response: {
+    headers: {
+      Content-Type: application/json
+    }
+
+    status: {
+      code: 200
+      text: OK
+    }
+
+    body: {
+      type: json
+      content: '''
+        {
+          "success": true,
+          "data": {
+            "id": 20,
+            "input_type": "voice_recording",
+            "file_path": "/uploads/voice/3/recording.wav"
+          }
+        }
+      '''
+    }
+  }
+}
+
+example {
+  name: 400 Bad Request
+  description: No audio file provided
+
+  response: {
+    headers: {
+      Content-Type: application/json
+    }
+
+    status: {
+      code: 400
+      text: Bad Request
+    }
+
+    body: {
+      type: json
+      content: '''
+        {
+          "error": "No audio file provided"
+        }
+      '''
+    }
+  }
+}

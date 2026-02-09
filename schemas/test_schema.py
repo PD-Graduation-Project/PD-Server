@@ -2,8 +2,8 @@ from marshmallow import Schema, fields, validate
 
 
 class TremorTestConfigSchema(Schema):
-    step_1a = fields.Boolean(required=False, load_default=True)
-    step_1b = fields.Boolean(required=False, load_default=True)
+    step_0 = fields.Boolean(required=False, load_default=True)
+    step_1 = fields.Boolean(required=False, load_default=True)
     step_2 = fields.Boolean(required=False, load_default=True)
     step_3 = fields.Boolean(required=False, load_default=True)
     step_4 = fields.Boolean(required=False, load_default=True)
@@ -74,3 +74,40 @@ class TestListResponseSchema(Schema):
     page = fields.Integer()
     per_page = fields.Integer()
     pages = fields.Integer()
+
+
+# File Upload Schemas
+class TremorUploadSchema(Schema):
+    subtest = fields.String(
+        required=True,
+        validate=validate.OneOf(
+            ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10"]
+        ),
+    )
+    hand = fields.String(required=True, validate=validate.OneOf(["l", "r"]))
+
+
+class TremorUploadResponseSchema(Schema):
+    id = fields.Integer()
+    input_type = fields.String()
+    subtest = fields.String()
+    hand = fields.String()
+    file_path = fields.String()
+
+
+class DrawingUploadResponseSchema(Schema):
+    inputs = fields.List(fields.Dict())
+
+
+class VoiceUploadResponseSchema(Schema):
+    id = fields.Integer()
+    input_type = fields.String()
+    file_path = fields.String()
+
+
+class CompleteTestResponseSchema(Schema):
+    message = fields.String()
+    status = fields.String()
+    uploaded_count = fields.Integer()
+    expected_count = fields.Integer()
+    missing = fields.List(fields.String())

@@ -13,6 +13,28 @@ docs {
   - **drawing**: Spiral drawing image analysis
   - **voice**: Voice recording analysis
 
+  ## Workflow
+  1. Create test: POST /tests
+  2. Upload files:
+     - Tremor: POST /tests/{id}/tremor (one file per subtest/hand)
+     - Drawings: POST /tests/{id}/drawings (two images)
+     - Voice: POST /tests/{id}/voice (one audio file)
+  3. Complete test: POST /tests/{id}/complete
+
+  ## Creating Tests
+  Use `POST /tests` to create a new test session. For tremor tests, you can specify which steps to include in the config.
+}
+
+docs {
+  # Test Routes
+
+  Endpoints for managing Parkinson's disease tests including tremor, drawing, and voice tests.
+
+  ## Test Types
+  - **tremor**: Gyro data collection via ESP32 device
+  - **drawing**: Spiral drawing image analysis
+  - **voice**: Voice recording analysis
+
   ## Creating Tests
   Use `POST /api/tests` to create a new test session. For tremor tests, you can specify which steps to include in the config.
 }

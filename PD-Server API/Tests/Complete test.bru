@@ -1,0 +1,142 @@
+meta {
+  name: Complete test
+  type: http
+  seq: 7
+}
+
+post {
+  url: {{baseUrl}}/api/tests/1/complete
+  auth: inherit
+}
+
+docs {
+  # Complete Test
+
+  Mark a test as completed. Used by ESP32 after all gyro files are uploaded.
+
+  ## Tremor Tests
+  Validates that all configured subtests have both left/right files uploaded.
+  Returns list of any missing files.
+
+  ## Other Tests
+  Confirms completion after file uploads.
+}
+
+example {
+  name: 200 OK - Success
+  description: Successfully completed tremor test
+
+  request: {
+    url: {{baseUrl}}/api/tests/1/complete
+    method: POST
+  }
+
+  response: {
+    headers: {
+      Content-Type: application/json
+    }
+
+    status: {
+      code: 200
+      text: OK
+    }
+
+    body: {
+      type: json
+      content: '''
+        {
+          "success": true,
+          "data": {
+            "message": "Test completed",
+            "status": "completed",
+            "uploaded_count": 20,
+            "expected_count": 20,
+            "missing": []
+          }
+        }
+      '''
+    }
+  }
+}
+
+example {
+  name: 200 OK - With Missing Files
+  description: Completed but some files missing
+
+  response: {
+    headers: {
+      Content-Type: application/json
+    }
+
+    status: {
+      code: 200
+      text: OK
+    }
+
+    body: {
+      type: json
+      content: '''
+        {
+          "success": true,
+          "data": {
+            "message": "Test completed",
+            "status": "completed",
+            "uploaded_count": 18,
+            "expected_count": 20,
+            "missing": ["1_2_l.txt", "1_2_r.txt"]
+          }
+        }
+      '''
+    }
+  }
+}
+
+example {
+  name: 400 Bad Request - Already Completed
+  description: Test was already marked as completed
+
+  response: {
+    headers: {
+      Content-Type: application/json
+    }
+
+    status: {
+      code: 400
+      text: Bad Request
+    }
+
+    body: {
+      type: json
+      content: '''
+        {
+          "error": "Test is already completed"
+        }
+      '''
+    }
+  }
+}
+
+example {
+  name: 400 Bad Request - Pending
+  description: No files uploaded yet
+
+  response: {
+    headers: {
+      Content-Type: application/json
+    }
+
+    status: {
+      code: 400
+      text: Bad Request
+    }
+
+    body: {
+      type: json
+      content: '''
+        {
+          "error": "Test has no uploads yet"
+        }
+      '''
+    }
+  }
+}
