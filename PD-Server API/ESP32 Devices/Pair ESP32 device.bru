@@ -1,0 +1,148 @@
+meta {
+  name: Pair ESP32 device
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/api/esp32-devices
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "device_id": "ESP32-001234",
+    "name": "My Tremor Sensor"
+  }
+}
+
+docs {
+  # Pair ESP32 Device
+
+  Pair an ESP32 device to the current user's account.
+
+  ## Request Body
+  - `device_id` (required): Unique hardware identifier from the ESP32 device
+  - `name` (optional): User-friendly name for the device
+
+  ## Response
+  Returns the device details including a one-time `api_key`. Save this key securely - it won't be shown again.
+}
+
+example {
+  name: 201 Created
+  description: Successfully paired ESP32 device
+
+  request: {
+    url: {{baseUrl}}/api/esp32-devices
+    method: POST
+    mode: json
+    body:json: {
+      {
+        "device_id": "ESP32-001234",
+        "name": "My Tremor Sensor"
+      }
+    }
+  }
+
+  response: {
+    headers: {
+      Content-Type: application/json
+    }
+
+    status: {
+      code: 201
+      text: Created
+    }
+
+    body: {
+      type: json
+      content: '''
+        {
+          "success": true,
+          "data": {
+            "id": 1,
+            "device_id": "ESP32-001234",
+            "name": "My Tremor Sensor",
+            "api_key": "sk_live_abc123xyz789...",
+            "is_connected": false,
+            "created_at": "2026-02-09T10:00:00Z"
+          }
+        }
+      '''
+    }
+  }
+}
+
+example {
+  name: 400 Bad Request
+  description: Missing device_id
+
+  request: {
+    url: {{baseUrl}}/api/esp32-devices
+    method: POST
+    mode: json
+    body:json: {
+      {
+        "name": "My Sensor"
+      }
+    }
+  }
+
+  response: {
+    headers: {
+      Content-Type: application/json
+    }
+
+    status: {
+      code: 400
+      text: Bad Request
+    }
+
+    body: {
+      type: json
+      content: '''
+        {
+          "error": "..."
+        }
+      '''
+    }
+  }
+}
+
+example {
+  name: 401 Unauthorized
+  description: Missing authentication token
+
+  request: {
+    url: {{baseUrl}}/api/esp32-devices
+    method: POST
+    mode: json
+    body:json: {
+      {
+        "device_id": "ESP32-001234"
+      }
+    }
+  }
+
+  response: {
+    headers: {
+      Content-Type: application/json
+    }
+
+    status: {
+      code: 401
+      text: Unauthorized
+    }
+
+    body: {
+      type: json
+      content: '''
+        {
+          "error": "..."
+        }
+      '''
+    }
+  }
+}

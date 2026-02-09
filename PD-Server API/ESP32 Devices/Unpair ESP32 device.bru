@@ -1,0 +1,109 @@
+meta {
+  name: Unpair ESP32 device
+  type: http
+  seq: 3
+}
+
+delete {
+  url: {{baseUrl}}/api/esp32-devices/1
+  auth: inherit
+}
+
+docs {
+  # Unpair ESP32 Device
+
+  Remove an ESP32 device from the user's account.
+
+  This will revoke the device's API key and the device will no longer be able to upload data.
+}
+
+example {
+  name: 200 OK
+  description: Successfully unpaired ESP32 device
+
+  request: {
+    url: {{baseUrl}}/api/esp32-devices/1
+    method: DELETE
+  }
+
+  response: {
+    headers: {
+      Content-Type: application/json
+    }
+
+    status: {
+      code: 200
+      text: OK
+    }
+
+    body: {
+      type: json
+      content: '''
+        {
+          "success": true,
+          "message": "Device unpaired successfully"
+        }
+      '''
+    }
+  }
+}
+
+example {
+  name: 404 Not Found
+  description: Device not found
+
+  request: {
+    url: {{baseUrl}}/api/esp32-devices/9999
+    method: DELETE
+  }
+
+  response: {
+    headers: {
+      Content-Type: application/json
+    }
+
+    status: {
+      code: 404
+      text: Not Found
+    }
+
+    body: {
+      type: json
+      content: '''
+        {
+          "error": "Device not found"
+        }
+      '''
+    }
+  }
+}
+
+example {
+  name: 401 Unauthorized
+  description: Missing authentication token
+
+  request: {
+    url: {{baseUrl}}/api/esp32-devices/1
+    method: DELETE
+  }
+
+  response: {
+    headers: {
+      Content-Type: application/json
+    }
+
+    status: {
+      code: 401
+      text: Unauthorized
+    }
+
+    body: {
+      type: json
+      content: '''
+        {
+          "error": "..."
+        }
+      '''
+    }
+  }
+}

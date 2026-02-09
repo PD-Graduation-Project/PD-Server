@@ -1,0 +1,149 @@
+meta {
+  name: List test sessions
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/api/tests
+  auth: inherit
+}
+
+params:query {
+  test_type=tremor
+  status=pending
+  page=1
+  per_page=20
+}
+
+docs {
+  # List Test Sessions
+
+  Get a paginated list of the user's test sessions.
+
+  ## Query Parameters
+  - `test_type` (optional): Filter by `tremor`, `drawing`, or `voice`
+  - `status` (optional): Filter by `pending`, `in_progress`, `completed`, `failed`
+  - `page` (optional): Page number (default: 1)
+  - `per_page` (optional): Items per page (default: 20, max: 100)
+}
+
+example {
+  name: 200 OK - With Filters
+  description: Successfully retrieved filtered list of test sessions
+
+  request: {
+    url: {{baseUrl}}/api/tests?test_type=tremor&status=pending&page=1&per_page=20
+    method: GET
+  }
+
+  response: {
+    headers: {
+      Content-Type: application/json
+    }
+
+    status: {
+      code: 200
+      text: OK
+    }
+
+    body: {
+      type: json
+      content: '''
+        {
+          "success": true,
+          "data": {
+            "tests": [
+              {
+                "id": 1,
+                "user_id": 1,
+                "test_type": "tremor",
+                "status": "pending",
+                "device_source": "esp32",
+                "config": {
+                  "step_1a": true,
+                  "step_1b": true
+                },
+                "created_at": "2026-02-09T10:00:00Z",
+                "completed_at": null,
+                "ml_score": null,
+                "inputs": []
+              }
+            ],
+            "total": 5,
+            "page": 1,
+            "per_page": 20,
+            "pages": 1
+          }
+        }
+      '''
+    }
+  }
+}
+
+example {
+  name: 200 OK - Empty List
+  description: No test sessions found
+
+  request: {
+    url: {{baseUrl}}/api/tests
+    method: GET
+  }
+
+  response: {
+    headers: {
+      Content-Type: application/json
+    }
+
+    status: {
+      code: 200
+      text: OK
+    }
+
+    body: {
+      type: json
+      content: '''
+        {
+          "success": true,
+          "data": {
+            "tests": [],
+            "total": 0,
+            "page": 1,
+            "per_page": 20,
+            "pages": 0
+          }
+        }
+      '''
+    }
+  }
+}
+
+example {
+  name: 401 Unauthorized
+  description: Missing authentication token
+
+  request: {
+    url: {{baseUrl}}/api/tests
+    method: GET
+  }
+
+  response: {
+    headers: {
+      Content-Type: application/json
+    }
+
+    status: {
+      code: 401
+      text: Unauthorized
+    }
+
+    body: {
+      type: json
+      content: '''
+        {
+          "error": "..."
+        }
+      '''
+    }
+  }
+}

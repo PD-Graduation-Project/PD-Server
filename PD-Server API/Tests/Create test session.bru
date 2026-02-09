@@ -1,0 +1,316 @@
+meta {
+  name: Create test session
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/api/tests
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "test_type": "tremor",
+    "device": "esp32",
+    "config": {
+      "step_1a": true,
+      "step_1b": true,
+      "step_2": false
+    }
+  }
+}
+
+docs {
+  # Create Test Session
+
+  Create a new test session for tremor, drawing, or voice tests.
+
+  ## Tremor Tests
+  For tremor tests, you can specify which steps to include in the config:
+  - step_1a: Resting eyes closed
+  - step_1b: Resting with serial sevens
+  - step_2 through step_10: Other movement tests
+
+  ## Device Override
+  Use the `device` field to override the default device source:
+  - `esp32`: Use ESP32 sensor (default for tremor tests)
+  - `mobile`: Use mobile app (default for drawing/voice tests)
+
+  ## Drawing/Voice Tests
+  For drawing or voice tests, omit the config or leave it empty.
+}
+
+example {
+  name: 201 Created - Tremor Test
+  description: Successfully created a tremor test session with ESP32 device
+
+  request: {
+    url: {{baseUrl}}/api/tests
+    method: POST
+    mode: json
+    body:json: {
+      {
+        "test_type": "tremor",
+        "device": "esp32",
+        "config": {
+          "step_1a": true,
+          "step_1b": true,
+          "step_2": false
+        }
+      }
+    }
+  }
+
+  response: {
+    headers: {
+      Content-Type: application/json
+    }
+
+    status: {
+      code: 201
+      text: Created
+    }
+
+    body: {
+      type: json
+      content: '''
+        {
+          "success": true,
+          "data": {
+            "id": 1,
+            "user_id": 1,
+            "test_type": "tremor",
+            "status": "pending",
+            "device_source": "esp32",
+            "config": {
+              "step_1a": true,
+              "step_1b": true,
+              "step_2": false
+            },
+            "created_at": "2026-02-09T10:00:00Z",
+            "completed_at": null,
+            "ml_score": null,
+            "inputs": []
+          }
+        }
+      '''
+    }
+  }
+}
+
+example {
+  name: 201 Created - Drawing Test
+  description: Successfully created a drawing test session
+
+  request: {
+    url: {{baseUrl}}/api/tests
+    method: POST
+    mode: json
+    body:json: {
+      {
+        "test_type": "drawing"
+      }
+    }
+  }
+
+  response: {
+    headers: {
+      Content-Type: application/json
+    }
+
+    status: {
+      code: 201
+      text: Created
+    }
+
+    body: {
+      type: json
+      content: '''
+        {
+          "success": true,
+          "data": {
+            "id": 2,
+            "user_id": 1,
+            "test_type": "drawing",
+            "status": "pending",
+            "device_source": "mobile",
+            "config": {},
+            "created_at": "2026-02-09T10:00:00Z",
+            "completed_at": null,
+            "ml_score": null,
+            "inputs": []
+          }
+        }
+      '''
+    }
+  }
+}
+
+example {
+  name: 201 Created - Tremor Test with Device Override
+  description: Successfully created a tremor test with mobile device override
+
+  request: {
+    url: {{baseUrl}}/api/tests
+    method: POST
+    mode: json
+    body:json: {
+      {
+        "test_type": "tremor",
+        "device": "mobile",
+        "config": {
+          "step_1a": true,
+          "step_1b": true
+        }
+      }
+    }
+  }
+
+  response: {
+    headers: {
+      Content-Type: application/json
+    }
+
+    status: {
+      code: 201
+      text: Created
+    }
+
+    body: {
+      type: json
+      content: '''
+        {
+          "success": true,
+          "data": {
+            "id": 3,
+            "user_id": 1,
+            "test_type": "tremor",
+            "status": "pending",
+            "device_source": "mobile",
+            "config": {
+              "step_1a": true,
+              "step_1b": true
+            },
+            "created_at": "2026-02-09T10:00:00Z",
+            "completed_at": null,
+            "ml_score": null,
+            "inputs": []
+          }
+        }
+      '''
+    }
+  }
+}
+
+example {
+  name: 400 Bad Request - Invalid Device
+  description: Invalid device value
+
+  request: {
+    url: {{baseUrl}}/api/tests
+    method: POST
+    mode: json
+    body:json: {
+      {
+        "test_type": "tremor",
+        "device": "invalid"
+      }
+    }
+  }
+
+  response: {
+    headers: {
+      Content-Type: application/json
+    }
+
+    status: {
+      code: 400
+      text: Bad Request
+    }
+
+    body: {
+      type: json
+      content: '''
+        {
+          "success": false,
+          "error": "..."
+        }
+      '''
+    }
+  }
+}
+
+example {
+  name: 400 Bad Request
+  description: Invalid test type
+
+  request: {
+    url: {{baseUrl}}/api/tests
+    method: POST
+    mode: json
+    body:json: {
+      {
+        "test_type": "invalid"
+      }
+    }
+  }
+
+  response: {
+    headers: {
+      Content-Type: application/json
+    }
+
+    status: {
+      code: 400
+      text: Bad Request
+    }
+
+    body: {
+      type: json
+      content: '''
+        {
+          "success": false,
+          "error": "..."
+        }
+      '''
+    }
+  }
+}
+
+example {
+  name: 401 Unauthorized
+  description: Missing authentication token
+
+  request: {
+    url: {{baseUrl}}/api/tests
+    method: POST
+    mode: json
+    body:json: {
+      {
+        "test_type": "tremor"
+      }
+    }
+  }
+
+  response: {
+    headers: {
+      Content-Type: application/json
+    }
+
+    status: {
+      code: 401
+      text: Unauthorized
+    }
+
+    body: {
+      type: json
+      content: '''
+        {
+          "error": "..."
+        }
+      '''
+    }
+  }
+}

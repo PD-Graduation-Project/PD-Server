@@ -1,0 +1,94 @@
+meta {
+  name: List ESP32 devices
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/api/esp32-devices
+  auth: inherit
+}
+
+docs {
+  # List ESP32 Devices
+
+  Get a list of all ESP32 devices paired to the user's account.
+}
+
+example {
+  name: 200 OK
+  description: Successfully retrieved list of paired devices
+
+  request: {
+    url: {{baseUrl}}/api/esp32-devices
+    method: GET
+  }
+
+  response: {
+    headers: {
+      Content-Type: application/json
+    }
+
+    status: {
+      code: 200
+      text: OK
+    }
+
+    body: {
+      type: json
+      content: '''
+        {
+          "success": true,
+          "data": [
+            {
+              "id": 1,
+              "device_id": "ESP32-001234",
+              "name": "My Tremor Sensor",
+              "is_connected": true,
+              "last_seen_at": "2026-02-09T10:05:00Z",
+              "created_at": "2026-02-09T10:00:00Z"
+            },
+            {
+              "id": 2,
+              "device_id": "ESP32-001235",
+              "name": "Bedroom Sensor",
+              "is_connected": false,
+              "last_seen_at": "2026-02-08T22:30:00Z",
+              "created_at": "2026-02-08T20:00:00Z"
+            }
+          ]
+        }
+      '''
+    }
+  }
+}
+
+example {
+  name: 401 Unauthorized
+  description: Missing authentication token
+
+  request: {
+    url: {{baseUrl}}/api/esp32-devices
+    method: GET
+  }
+
+  response: {
+    headers: {
+      Content-Type: application/json
+    }
+
+    status: {
+      code: 401
+      text: Unauthorized
+    }
+
+    body: {
+      type: json
+      content: '''
+        {
+          "error": "..."
+        }
+      '''
+    }
+  }
+}

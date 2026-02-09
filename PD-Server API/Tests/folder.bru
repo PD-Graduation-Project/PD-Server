@@ -1,0 +1,18 @@
+meta {
+  name: Tests
+  type: http
+}
+
+docs {
+  # Test Routes
+
+  Endpoints for managing Parkinson's disease tests including tremor, drawing, and voice tests.
+
+  ## Test Types
+  - **tremor**: Gyro data collection via ESP32 device
+  - **drawing**: Spiral drawing image analysis
+  - **voice**: Voice recording analysis
+
+  ## Creating Tests
+  Use `POST /api/tests` to create a new test session. For tremor tests, you can specify which steps to include in the config.
+}
