@@ -1,5 +1,5 @@
 from models.database import db
-from models.test_models import TestInput, TestSession
+from models.test_models import ESP32Device, TestInput, TestSession
 from models.user import RefreshToken, User
 
 __all__ = [
@@ -8,4 +8,5 @@ __all__ = [
     "RefreshToken",
     "TestSession",
     "TestInput",
+    "ESP32Device",
 ]

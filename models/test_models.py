@@ -51,3 +51,23 @@ class TestInput(db.Model):
     __table_args__ = (
         db.Index("idx_test_input_session_type", "test_session_id", "input_type"),
     )
+
+
+class ESP32Device(db.Model):
+    __tablename__ = "esp32_devices"
+
+    id = db.Column(db.Integer, primary_key=True)
+    device_id = db.Column(db.String(100), unique=True, nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    api_key = db.Column(db.String(255), nullable=False)
+    name = db.Column(db.String(100), nullable=True)
+    is_connected = db.Column(db.Boolean, default=False)
+    last_seen_at = db.Column(db.DateTime, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    user = db.relationship("User", backref="esp32_devices")
+
+    __table_args__ = (
+        db.Index("idx_esp32_device_id", "device_id"),
+        db.Index("idx_esp32_user_id", "user_id"),
+    )
