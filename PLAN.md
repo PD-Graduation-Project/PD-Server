@@ -12,13 +12,13 @@ Parkinson's Disease detection server with three test types:
 
 1. **Mobile App**: User interface for starting tests, uploading images/audio, viewing results
 2. **Central Server**: API, authentication, ML model orchestration, data storage
-3. **ESP32**: Embedded system for collecting gyro sensor data
+3. **ESP32**: Embedded system for collecting gyro (sound is planned) sensor data
 
 ---
 
 ## Communication Flow
 
-### SSE-based ESP32 Notification (Recommended)
+### SSE-based ESP32 Notification
 
 Instead of polling, the server maintains a Server-Sent Events (SSE) stream that ESP32 devices connect to. When the app starts a tremor test, the server emits a `test_started` SSE event to the appropriate ESP32 device. The ESP32 then performs the test and uploads data via REST POST endpoints.
 
@@ -28,8 +28,8 @@ Instead of polling, the server maintains a Server-Sent Events (SSE) stream that 
 └────┬────┘                        └────┬────┘                        └────┬────┘
      │                                  │                                  │
      │  POST /tests                     │       GET /esp32/stream          │
-     │  {test_type: "tremor",         │  ◄──────────────────────────────  │
-     │   config: {...}}                 │       (persistent connection)     │
+     │  {test_type: "tremor",           │  ◄────────────────────────────── │
+     │   config: {...}}                 │       (persistent connection)    │
      │ ──────────────────────────────►  │                                  │
      │                                  │                                  │
      │                                  │  SSE event: test_started         │
@@ -37,7 +37,7 @@ Instead of polling, the server maintains a Server-Sent Events (SSE) stream that 
      │                                  │ ──────────────────────────────►  │
      │                                  │                                  │
      │                                  │  POST /esp32/tests/{id}/data     │
-     │                                  │ ◄──────────────────────────────  │
+     │                                  │ ◄─────Repeat for all tests─────  │
      │                                  │  {gyro_data: [...]}              │
      │                                  │                                  │
      │                                  │  POST /esp32/tests/{id}/complete │
@@ -93,7 +93,7 @@ Raw test files uploaded (images, audio, gyro data).
 | created_at | DateTime | Upload timestamp |
 | expires_at | DateTime | Auto-delete date (90 days from upload) |
 
-### 3. ESP32Device (new)
+### 3. ESP32Device
 
 Pairs an ESP32 device to a user and stores an API key for authentication.
 
@@ -112,6 +112,7 @@ Pairs an ESP32 device to a user and stores an API key for authentication.
 
 - `MLMetrics` table removed — detailed metrics can be added later if needed, currently `ml_score` on `TestSession` suffices.
 - `TestDemographicsSnapshot` removed — the `User` demographics are used; if historical snapshots become necessary we can add this model later.
+
 ---
 
 ## API Endpoints
@@ -126,7 +127,7 @@ Pairs an ESP32 device to a user and stores an API key for authentication.
 | POST | `/tests/{id}/drawings` | Upload 2 spiral images (multipart/form-data) |
 | POST | `/tests/{id}/voice` | Upload audio recording (multipart/form-data) |
 
-### ESP32 Device Management (JWT Auth)
+### ESP32 Device Management (JWT Authentication)
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
@@ -169,6 +170,7 @@ Pairs an ESP32 device to a user and stores an API key for authentication.
   "created_at": "2026-02-09T10:00:00Z"
 }
 ```
+
 #### GET /tests/{id} (Get Test Status)
 
 **Response (200 OK):**
@@ -182,6 +184,7 @@ Pairs an ESP32 device to a user and stores an API key for authentication.
   "completed_at": "2026-02-06T10:30:00Z"
 }
 ```
+
 #### POST /tests/{id}/drawings (Upload Spiral Images)
 
 **Request:** multipart/form-data with 2 images
@@ -281,7 +284,7 @@ data: {"test_id": 1, "test_type": "tremor", "config": {"duration_seconds": 30, "
 
 ### Phase 1: Database Models
 
-- [ ] Create models: TestSession, TestInput, ESP32Device
+- [x] Create models: TestSession, TestInput, ESP32Device
 - [ ] Write Alembic migration
 - [ ] Create indexes for efficient queries
 
@@ -357,8 +360,3 @@ pending → in_progress → completed
 4. **Questionnaire snapshot**: Store Q01-Q28 per test
 5. **Test scheduling**: Queue tests for future execution
 6. **Multi-user ESP32**: ESP32 serves multiple users
-
-## Improvements
-
-instead of exposing a http route for the esp to pool we introduce an SSE
-to the esp32 to know when the test starts (i should send the selected tests json from the app)
