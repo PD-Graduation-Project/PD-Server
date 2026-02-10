@@ -316,6 +316,22 @@ def complete_test(test_id):
 
     test_session.status = "completed"
     test_session.completed_at = datetime.utcnow()
+
+    ml_score = None
+    if test_session.test_type == "tremor":
+        from ml.tremor_model import predict_tremor
+
+        ml_score = predict_tremor(test_session.id)
+    elif test_session.test_type == "drawing":
+        from ml.drawing_model import predict_drawing
+
+        ml_score = predict_drawing(test_session.id)
+    elif test_session.test_type == "voice":
+        from ml.voice_model import predict_voice
+
+        ml_score = predict_voice(test_session.id)
+
+    test_session.ml_score = ml_score
     db.session.commit()
 
     return (
@@ -325,6 +341,7 @@ def complete_test(test_id):
                 "data": {
                     "message": "Test completed",
                     "status": "completed",
+                    "ml_score": ml_score,
                     "uploaded_count": uploaded_count,
                     "expected_count": expected_count,
                     "missing": missing,

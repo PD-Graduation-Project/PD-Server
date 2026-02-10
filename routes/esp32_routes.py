@@ -53,7 +53,7 @@ def register_device():
                 "success": True,
                 "data": {
                     "device_id": device.device_id,
-                    "api_key": production_key,
+                    "api_key": production_key,  # Should be saved inside the flash of the esp32
                 },
             }
         ),
