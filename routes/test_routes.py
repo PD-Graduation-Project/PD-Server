@@ -5,6 +5,7 @@ from models.database import db
 from models.test_models import TestSession
 from models.user import User
 from schemas.test_schema import CreateTestSchema, TestListQuerySchema, TestSessionSchema
+from utils.esp32_connection_manager import connection_manager
 
 test_bp = Blueprint("test", __name__, url_prefix="/api/tests")
 
@@ -41,6 +42,18 @@ def create_test():
 
     db.session.add(test_session)
     db.session.commit()
+
+    # If tremor test with ESP32, send SSE event to paired device
+    if test_type == "tremor" and device_source == "esp32":
+        connection_manager.send_event(
+            current_user.id,
+            "test_started",
+            {
+                "test_id": test_session.id,
+                "test_type": test_type,
+                "config": config,
+            },
+        )
 
     return (
         jsonify(

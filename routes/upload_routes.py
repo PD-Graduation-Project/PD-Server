@@ -3,6 +3,7 @@ from datetime import datetime
 from flask import Blueprint, g, jsonify, request
 
 from middleware.authenticate import authenticate
+from middleware.authenticate_esp32 import authenticate_jwt_or_esp32
 from models.database import db
 from models.test_models import TestInput, TestSession
 from models.user import User
@@ -23,7 +24,7 @@ upload_bp = Blueprint("upload", __name__, url_prefix="/api/tests")
 
 
 @upload_bp.route("/<int:test_id>/tremor", methods=["POST"])
-@authenticate
+@authenticate_jwt_or_esp32
 def upload_tremor(test_id):
     """Upload gyro TXT file for tremor test."""
     current_user = db.session.get(User, g.user_id)
@@ -264,7 +265,7 @@ def upload_voice(test_id):
 
 
 @upload_bp.route("/<int:test_id>/complete", methods=["POST"])
-@authenticate
+@authenticate_jwt_or_esp32
 def complete_test(test_id):
     """Mark a test as completed."""
     current_user = db.session.get(User, g.user_id)

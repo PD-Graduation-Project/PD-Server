@@ -356,17 +356,18 @@
 
 ## ESP32 Device Routes (`/api/esp32-devices`)
 
-### `POST /api/esp32-devices`
+### `POST /api/esp32-devices/pair`
 
-- **Description**: Pair an ESP32 device to the current user
+- **Description**: Pair an ESP32 device to the current user account
 - **Headers**: `Authorization: Bearer <token>`
 - **Request Body**: JSON object
-  - `device_id` (required): Unique hardware identifier from ESP32
+  - `device_id` (required): Device ID from sticker on ESP32 (e.g., `ESP32-001234`)
   - `name` (optional): User-friendly name for the device
 - **Response**:
-  - Success (201): Device paired, returns `api_key`
-  - Error (400): Missing device_id
+  - Success (200): Device paired successfully
+  - Error (400): Missing device_id or invalid device
   - Error (401): Invalid or missing token
+  - Error (404): Device not found in database
 - **Example Request**:
 
   ```json
@@ -385,7 +386,6 @@
       "id": 1,
       "device_id": "ESP32-001234",
       "name": "My Tremor Sensor",
-      "api_key": "sk_live_abc123...",
       "is_connected": false,
       "created_at": "2026-02-09T10:00:00Z"
     }
@@ -394,20 +394,156 @@
 
 ### `GET /api/esp32-devices`
 
-- **Description**: List user's paired ESP32 devices
+- **Description**: List all ESP32 devices paired to the current user's account
 - **Headers**: `Authorization: Bearer <token>`
 - **Response**:
   - Success (200): List of paired devices
   - Error (401): Invalid or missing token
+- **Example Response**:
+
+  ```json
+  {
+    "success": true,
+    "data": [
+      {
+        "id": 1,
+        "device_id": "ESP32-001234",
+        "name": "My Tremor Sensor",
+        "is_connected": true,
+        "created_at": "2026-02-09T10:00:00Z"
+      }
+    ]
+  }
+  ```
 
 ### `DELETE /api/esp32-devices/<device_id>`
 
-- **Description**: Unpair an ESP32 device
+- **Description**: Unpair an ESP32 device from the current user's account
 - **Headers**: `Authorization: Bearer <token>`
 - **Response**:
   - Success (200): Device unpaired
   - Error (401): Invalid or missing token
-  - Error (404): Device not found
+  - Error (404): Device not found or not paired to this user
+- **Example Response**:
+
+  ```json
+  {
+    "success": true,
+    "message": "Device unpaired successfully"
+  }
+  ```
+
+## ESP32 Device Registration Routes (`/api/esp32`)
+
+These routes are used by the ESP32 device itself, not by the mobile app.
+
+### `POST /api/esp32/register`
+
+- **Description**: Register ESP32 device and receive production API key
+- **Headers**: `X-Device-API-Key: <factory_api_key>`
+- **Request Body**: JSON object
+  - `device_id` (required): Device ID (e.g., `ESP32-001234`)
+- **Response**:
+  - Success (200): Device registered, returns production API key
+  - Error (401): Invalid factory API key
+  - Error (400): Invalid request
+- **Note**: Called automatically by ESP32 on first boot. Factory API key is pre-programmed in firmware and database.
+- **Example Request**:
+
+  ```json
+  {
+    "device_id": "ESP32-001234"
+  }
+  ```
+
+- **Example Response**:
+
+  ```json
+  {
+    "success": true,
+    "data": {
+      "device_id": "ESP32-001234",
+      "api_key": "sk_live_abc123def456..."
+    }
+  }
+  ```
+
+### `GET /api/esp32/stream`
+
+- **Description**: Server-Sent Events stream for ESP32 devices to receive test_started events
+- **Headers**: `X-Device-API-Key: <production_api_key>`
+- **Response**: SSE stream (HTTP 200, connection kept open)
+- **SSE Events**:
+  - `test_started`: When mobile app starts a tremor test for this device's user
+  - `heartbeat`: Periodic keep-alive event (every 30 seconds)
+- **Example Event**:
+
+  ```
+  event: test_started
+  data: {"test_id": 5, "test_type": "tremor", "config": {"step_0": true, "step_1": true}}
+  ```
+
+  ```
+  event: heartbeat
+  data: {"timestamp": "2026-02-09T10:00:00Z"}
+  ```
+
+### `POST /api/esp32/heartbeat`
+
+- **Description**: Report ESP32 device is online (keep-alive)
+- **Headers**: `X-Device-API-Key: <production_api_key>`
+- **Response**:
+  - Success (200): Heartbeat recorded
+  - Error (401): Invalid API key
+- **Example Response**:
+
+  ```json
+  {
+    "success": true,
+    "message": "Heartbeat received"
+  }
+  ```
+
+## ESP32 Data Upload Routes (`/api/esp32/tests/<test_id>`)
+
+**Note**: These routes are deprecated in favor of the standard `/api/tests/{id}/tremor` and `/api/tests/{id}/complete` routes. ESP32 can use either endpoint.
+
+### `POST /api/esp32/tests/<test_id>/data` (Deprecated)
+
+Use `/api/tests/{id}/tremor` instead.
+
+### `POST /api/esp32/tests/<test_id>/complete` (Deprecated)
+
+Use `/api/tests/{id}/complete` instead.
+
+## ESP32 Authentication Flow
+
+### Pairing Flow (User Action)
+
+1. User sees sticker on ESP32: `Device ID: ESP32-001234`
+2. User opens mobile app → "Pair Device"
+3. User types: `ESP32-001234`
+4. Optionally names: "My Sensor"
+5. Server links device to user account
+6. Done!
+
+### ESP32 Registration Flow (Automatic)
+
+1. ESP32 boots with factory API key pre-programmed
+2. ESP32 calls `POST /api/esp32/register` with factory key
+3. Server validates factory key, generates production API key
+4. ESP32 stores production key in flash
+5. ESP32 connects to `GET /api/esp32/stream`
+6. ESP32 ready to receive test_started events
+
+### Data Flow During Test
+
+1. Mobile app creates tremor test: `POST /api/tests`
+2. Server looks up user's paired ESP32 device
+3. Server sends SSE event to ESP32: `test_started`
+4. ESP32 collects gyro data, uploads via `POST /api/tests/{id}/tremor`
+5. ESP32 calls `POST /api/tests/{id}/complete`
+6. Mobile app polls `GET /api/tests/{id}` for results
 
 ## User Routes (`/api/user`)
 
@@ -574,3 +710,16 @@ Available tremor test steps (controlled via `config`):
 | step_8 | Touch index fingers together | true |
 | step_9 | Tap nose with index finger | true |
 | step_10 | Entrainment foot stomping | true |
+
+## ESP32 Device ID Format
+
+- Device IDs follow format: `ESP32-XXXXXX` (e.g., `ESP32-001234`)
+- Printed on sticker on ESP32 device
+- User types this ID in mobile app to pair device
+
+## ESP32 vs Mobile
+
+- ESP32 handles tremor test (sensor data)
+- Mobile handles drawing + voice tests (user input)
+- Different authentication (API key vs JWT)
+- Separate route namespaces for clarity

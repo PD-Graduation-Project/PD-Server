@@ -4,7 +4,7 @@ import pytest
 
 from app import create_app  # Adjust import based on your app structure
 from models.database import db
-from models.test_models import TestInput, TestSession
+from models.test_models import ESP32Device, TestInput, TestSession
 from models.user import RefreshToken, User
 
 
@@ -56,6 +56,7 @@ def db_session(app):
     with app.app_context():
         TestInput.query.delete()
         TestSession.query.delete()
+        ESP32Device.query.delete()
         RefreshToken.query.delete()
         User.query.delete()
         db.session.commit()
@@ -65,6 +66,7 @@ def db_session(app):
         db.session.rollback()
         TestInput.query.delete()
         TestSession.query.delete()
+        ESP32Device.query.delete()
         RefreshToken.query.delete()
         User.query.delete()
         db.session.commit()
@@ -245,3 +247,72 @@ def multiple_sessions(app, test_user, db_session):
 
         db_session.commit()
         return tokens
+
+
+@pytest.fixture
+def esp32_device(db_session, test_user):
+    """
+    Create a registered and paired ESP32 device with production API key.
+    """
+    device = ESP32Device(
+        device_id="ESP32-001234",
+        user_id=test_user.id,
+        factory_api_key="factory_test_key_abc123",
+        api_key="sk_live_test_production_key_xyz789",
+        name="Test Sensor",
+        is_connected=False,
+    )
+    db_session.add(device)
+    db_session.commit()
+    return device
+
+
+@pytest.fixture
+def esp32_device_unpaired(db_session):
+    """
+    Create a registered but unpaired ESP32 device (no user_id).
+    """
+    device = ESP32Device(
+        device_id="ESP32-005678",
+        factory_api_key="factory_unpaired_key_def456",
+        api_key="sk_live_unpaired_key_abc123",
+        is_connected=False,
+    )
+    db_session.add(device)
+    db_session.commit()
+    return device
+
+
+@pytest.fixture
+def esp32_device_unregistered(db_session):
+    """
+    Create an ESP32 device that hasn't registered yet (no production key).
+    """
+    device = ESP32Device(
+        device_id="ESP32-009999",
+        factory_api_key="factory_unregistered_key_ghi789",
+        is_connected=False,
+    )
+    db_session.add(device)
+    db_session.commit()
+    return device
+
+
+@pytest.fixture
+def esp32_api_key_headers(esp32_device):
+    """
+    Headers for ESP32 production API key authentication.
+    """
+    return {
+        "X-Device-API-Key": esp32_device.api_key,
+    }
+
+
+@pytest.fixture
+def esp32_factory_key_headers(esp32_device_unregistered):
+    """
+    Headers for ESP32 factory API key authentication.
+    """
+    return {
+        "X-Device-API-Key": esp32_device_unregistered.factory_api_key,
+    }

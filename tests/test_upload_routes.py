@@ -316,7 +316,7 @@ class TestUploadVoice:
 
 class TestCompleteTest:
     def test_complete_test_success(
-        self, client, auth_headers, in_progress_voice_session
+        self, app, client, auth_headers, in_progress_voice_session
     ):
         response = client.post(
             f"/api/tests/{in_progress_voice_session.id}/complete",
@@ -326,6 +326,15 @@ class TestCompleteTest:
         result = response.get_json()
         assert result["success"] is True
         assert result["data"]["status"] == "completed"
+        assert "ml_score" in result["data"]
+        assert result["data"]["ml_score"] is not None
+        assert 0.0 <= result["data"]["ml_score"] <= 1.0
+
+        with app.app_context():
+            from models.test_models import TestSession
+
+            session = db.session.get(TestSession, in_progress_voice_session.id)
+            assert session.ml_score is not None
 
     def test_complete_test_already_completed(
         self, app, client, auth_headers, test_user, clean_test_data
@@ -336,6 +345,7 @@ class TestCompleteTest:
                 test_type="voice",
                 status="completed",
                 device_source="mobile",
+                ml_score=0.5,
             )
             db.session.add(session)
             db.session.commit()

@@ -20,6 +20,8 @@ def create_app(config_override=None):
     CORS(app)
 
     from routes.auth_routes import auth_bp
+    from routes.esp32_devices_routes import esp32_devices_bp
+    from routes.esp32_routes import esp32_bp
     from routes.questionnaire_routes import questionnaire_bp
     from routes.test_routes import test_bp
     from routes.upload_routes import upload_bp
@@ -30,6 +32,8 @@ def create_app(config_override=None):
     app.register_blueprint(questionnaire_bp)
     app.register_blueprint(test_bp)
     app.register_blueprint(upload_bp)
+    app.register_blueprint(esp32_bp)
+    app.register_blueprint(esp32_devices_bp)
 
     @app.route("/health", methods=["GET"])
     def health_check():

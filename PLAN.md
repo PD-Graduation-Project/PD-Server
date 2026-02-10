@@ -16,48 +16,71 @@ Parkinson's Disease detection server with three test types:
 
 ---
 
-
 ## Communication Flow
 
-### SSE-based ESP32 Notification
-
-Instead of polling, the server maintains a Server-Sent Events (SSE) stream that ESP32 devices connect to. When the app starts a tremor test, the server emits a `test_started` SSE event to the appropriate ESP32 device. The ESP32 then performs the test and uploads data via REST POST endpoints.
+### ESP32 Registration & Connection Flow
 
 ```
-┌─────────┐                        ┌─────────┐                        ┌─────────┐
-│   App   │                        │ Server  │                        │  ESP32  │
-└────┬────┘                        └────┬────┘                        └────┬────┘
-     │                                  │                                  │
-     │  POST /tests                     │       GET /esp32/stream          │
-     │  {test_type: "tremor",          │  ◄────────────────────────────── │
-     │   config: {...}}                │       (persistent connection)     │
-     │ ──────────────────────────────►  │                                  │
-     │                                  │                                  │
-     │                                  │  SSE event: test_started         │
-     │                                  │  {test_id, test_type, config}   │
-     │                                  │ ──────────────────────────────►  │
-     │                                  │                                  │
-     │                                  │  POST /tests/{id}/tremor        │
-     │                                  │ ◄─────Repeat for each subtest── │
-     │                                  │  {subtest: "1a", hand: "l",     │
-     │                                  │   file: <txt data>}             │
-     │                                  │                                  │
-     │                                  │  POST /tests/{id}/complete     │
-     │                                  │ ◄──────────────────────────────  │
-     │  GET /tests/{id}                 │                                  │
-     │ ◄──────────────────────────────  │                                  │
-     │  {status: completed, score: 0.7} │                                  │
-     │                                  │                                  │
+┌──────────┐                        ┌─────────────┐                        ┌─────────┐
+│  ESP32   │                        │   Server    │                        │   App   │
+└────┬─────┘                        └──────┬──────┘                        └────┬────┘
+     │                                     │                                    │
+     │  POST /api/esp32/register           │                                    │
+     │  (factory_api_key)                  │                                    │
+     │ ─────────────────────────────────►  │                                    │
+     │                                     │                                    │
+     │                                     │  Generate production_api_key       │
+     │                                     │  Return: { device_id, api_key }    │
+     │ ◄─────────────────────────────────  │                                    │
+     │                                     │                                    │
+     │  Store api_key in flash             │                                    │
+     │                                     │                                    │
+     │  GET /api/esp32/stream              │                                    │
+     │  (production_api_key)               │                                    │
+     │ ─────────────────────────────────►  │                                    │
+     │                                     │                                    │
+     │                                     │  SSE connection open               │
+     │                                     │                                    │
+     │                                     │                                    │
+     │                                     │  POST /api/esp32-devices/pair      │
+     │                                     │  (JWT auth, device_id typed)       │
+     │                                     │ ◄────────────────────────────────  │
+     │                                     │                                    │
+     │                                     │  Link device.user_id = user        │
+     │                                     │                                    │
+     │                                     │                                    │
+     │                                     │  POST /api/tests                   │
+     │                                     │ ◄────────────────────────────────  │
+     │                                     │{ test_type: "tremor", config:{...}}│
+     │                                     │                                    │
+     │                                     │  Find ESP32 with user_id           │
+     │                                     │                                    │
+     │  SSE event: test_started            │                                    │
+     │ ◄────────────────────────────────   │                                    │
+     │  { test_id, config }                │                                    │
+     │                                     │                                    │
+     │  Run test, collect gyro data        │                                    │
+     │                                     │                                    │
+     │  POST /api/tests/{id}/tremor        │                                    │
+     │  (multiple files)                   │                                    │
+     │ ─────────────────────────────────►  │                                    │
+     │                                     │                                    │
+     │  POST /api/tests/{id}/complete      │                                    │
+     │ ─────────────────────────────────►  │                                    │
+     │                                     │                                    │
+     │                                     │  GET /api/tests/{id}               │
+     │                                     │ ◄────────────────────────────────  │
+     │                                     │  { status: "completed" }           │
 ```
 
 ### Gyro Data Upload Details
 
 - **File Format**: Plain TXT files (not JSON)
 - **Files per test**: 2-22 files (varies based on config)
-- **Subtests**: 1a, 1b, 2, 3, 4, 5, 6, 7, 8, 9 (each with left/right hand = 2 files per subtest)
+- **Subtests**: 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 (each with left/right hand = 2 files per subtest)
 - **Filename**: `{test_id}_{subtest}_{l|r}.txt` (e.g., `1_1a_l.txt`, `1_1b_r.txt`)
 - **Upload**: Single file per POST request
-- **Client specifies**: subtest name (1a, 1b, 2-9) and hand (l or r)
+- **Client specifies**: subtest name (0-9) and hand (l or r)
 
 ### Key Flow Details
 
@@ -71,7 +94,6 @@ Instead of polling, the server maintains a Server-Sent Events (SSE) stream that 
 8. **App polls for results** → GET `/tests/{id}` until completed
 
 ---
-
 
 ## Database Schema
 
@@ -115,8 +137,9 @@ Pairs an ESP32 device to a user and stores an API key for authentication.
 |--------|------|-------------|
 | id | Integer | Primary Key |
 | device_id | String | Unique hardware identifier (provided on device) |
-| user_id | FK | Owner user |
-| api_key | String | Device API key (showed once at pairing) |
+| user_id | FK | Owner user (null if not yet paired) |
+| factory_api_key | String | Pre-programmed factory key (for initial registration) |
+| api_key | String | Production API key (generated after first boot) |
 | name | String | Optional user-friendly name |
 | is_connected | Boolean | SSE connection status |
 | last_seen_at | DateTime | Last heartbeat or SSE event timestamp |
@@ -124,30 +147,35 @@ Pairs an ESP32 device to a user and stores an API key for authentication.
 
 ---
 
-
 ## API Endpoints
 
-### App Routes (JWT Authentication)
+### App Routes (JWT or API Key Authentication)
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | POST | `/tests` | Start a single test session (tremor/drawing/voice) |
 | GET | `/tests` | List user's tests (with pagination and filters) |
 | GET | `/tests/{id}` | Get test status and results |
-| POST | `/tests/{id}/tremor` | Upload gyro TXT file (ESP32 via API key) |
+| POST | `/tests/{id}/tremor` | Upload gyro TXT file (ESP32 via API key or mobile via JWT) |
 | POST | `/tests/{id}/drawings` | Upload 2 spiral images (multipart/form-data) |
 | POST | `/tests/{id}/voice` | Upload audio recording (multipart/form-data) |
-| POST | `/tests/{id}/complete` | Signal test completion (ESP32 via API key) |
+| POST | `/tests/{id}/complete` | Signal test completion (ESP32 via API key or mobile via JWT) |
 
 ### ESP32 Device Management (JWT Authentication)
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| POST | `/esp32-devices` | Pair an ESP32 device to the current user (provide `device_id`) |
+| POST | `/esp32-devices/pair` | Pair ESP32 device to current user (provide device_id) |
 | GET | `/esp32-devices` | List user's paired ESP32 devices |
-| DELETE | `/esp32-devices/{id}` | Unpair device |
+| DELETE | `/esp32-devices/<id>` | Unpair device |
 
-### ESP32 Routes (API Key Authentication)
+### ESP32 Device Registration (Factory API Key Authentication)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/esp32/register` | Register ESP32, get production API key |
+
+### ESP32 Routes (Production API Key Authentication)
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
@@ -311,7 +339,6 @@ data: {"test_id": 1, "test_type": "tremor", "config": {"step_1a": true, "step_1b
 
 ---
 
-
 ## Storage Strategy
 
 ### File Storage
@@ -356,7 +383,6 @@ uploads/tremor/1/
 
 ---
 
-
 ## Implementation Phases
 
 ### Phase 1: Database Models
@@ -367,10 +393,14 @@ uploads/tremor/1/
 
 ### Phase 2: ESP32 Routes & SSE
 
-- [ ] `/esp32/stream` - SSE endpoint for devices to receive `test_started` events
-- [ ] `/esp32/heartbeat` - Heartbeat endpoint (updates is_connected, last_seen_at)
-- [ ] Add API key authentication middleware for ESP32 routes
-- [ ] Device-to-user lookup when SSE connection established
+- [x] `/esp32/register` - ESP32 registration endpoint (factory key → production key)
+- [x] `/esp32/stream` - SSE endpoint for devices to receive `test_started` events
+- [x] `/esp32/heartbeat` - Heartbeat endpoint (updates is_connected, last_seen_at)
+- [x] API key authentication middleware for ESP32 routes
+- [x] Device-to-user lookup when SSE connection established
+- [x] `/esp32-devices/pair` - User pairing endpoint (user types device_id)
+- [x] `/esp32-devices` - List user's paired devices
+- [x] `/esp32-devices/<id>` - Unpair device
 
 ### Phase 3: App Routes - Test Session Management
 
@@ -380,11 +410,11 @@ uploads/tremor/1/
 
 ### Phase 4: App Routes - File Uploads
 
-- [ ] `POST /tests/{id}/tremor` - Upload gyro TXT file with subtest/hand
-- [ ] `POST /tests/{id}/drawings` - Handle 2 image uploads (spiral_left, spiral_right)
-- [ ] `POST /tests/{id}/voice` - Handle audio upload
-- [ ] Create TestInput records with expires_at
-- [ ] Validate file types and sizes
+- [x] `POST /tests/{id}/tremor` - Upload gyro TXT file with subtest/hand
+- [x] `POST /tests/{id}/drawings` - Handle 2 image uploads (spiral_left, spiral_right)
+- [x] `POST /tests/{id}/voice` - Handle audio upload
+- [x] Create TestInput records with expires_at
+- [x] Validate file types and sizes
 
 ### Phase 5: Storage & Maintenance
 
@@ -400,7 +430,6 @@ uploads/tremor/1/
 
 ---
 
-
 ## Notes
 
 ### Test Status Flow
@@ -411,9 +440,11 @@ pending → in_progress → completed
 ```
 
 **Status transitions:**
+
 - `pending` → `in_progress`: First file uploaded (tremor/drawing/voice)
 - `in_progress` → `completed`: All required files uploaded + `/complete` called (tremor)
 - `in_progress` → `completed`: Files uploaded (drawing/voice)
+- `in_progress` → `failed`: Missing required files when `/complete` called (tremor)
 
 ### Tremor Test Completion Logic
 
@@ -449,6 +480,7 @@ When creating a tremor test, the mobile app specifies which subtests to include:
 ```
 
 **Subtest names:**
+
 | Key | Name | Default |
 |-----|------|---------|
 | step_1a | Resting eyes closed | true |
@@ -470,8 +502,44 @@ When creating a tremor test, the mobile app specifies which subtests to include:
 - Different authentication (API key vs JWT)
 - Separate route namespaces for clarity
 
----
+### ESP32 Pairing Flow
 
+**Database (Pre-loaded at Factory):**
+
+| device_id | factory_api_key | user_id | production_api_key |
+|-----------|-----------------|---------|-------------------|
+| ESP32-001234 | factory_esp32_a1b2c3... | NULL | NULL |
+
+**ESP32 Firmware (Pre-programmed):**
+
+```cpp
+#define DEVICE_ID "ESP32-001234"
+#define FACTORY_API_KEY "factory_esp32_a1b2c3d4e5"
+```
+
+**User Pairing (User types only device_id):**
+
+1. User sees sticker: `ESP32-001234`
+2. User types in mobile app: `ESP32-001234`
+3. Server links device to user account
+4. Done!
+
+**ESP32 Registration (Automatic on first boot):**
+
+1. ESP32 calls `POST /api/esp32/register` with factory key
+2. Server validates, generates production key
+3. ESP32 stores production key in flash
+4. ESP32 connects to SSE stream
+
+### ESP32 Data Upload
+
+ESP32 can use either:
+
+- `/api/tests/{id}/tremor` (multipart form-data with file, subtest, hand)
+
+Both require `X-Device-API-Key` header with production API key.
+
+---
 
 ## Future Enhancements (Out of Scope)
 

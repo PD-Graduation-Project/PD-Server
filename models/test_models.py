@@ -59,8 +59,9 @@ class ESP32Device(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     device_id = db.Column(db.String(100), unique=True, nullable=False)
-    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
-    api_key = db.Column(db.String(255), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
+    factory_api_key = db.Column(db.String(255), nullable=False)
+    api_key = db.Column(db.String(255), nullable=True)
     name = db.Column(db.String(100), nullable=True)
     is_connected = db.Column(db.Boolean, default=False)
     last_seen_at = db.Column(db.DateTime, nullable=True)
@@ -71,4 +72,6 @@ class ESP32Device(db.Model):
     __table_args__ = (
         db.Index("idx_esp32_device_id", "device_id"),
         db.Index("idx_esp32_user_id", "user_id"),
+        db.Index("idx_esp32_api_key", "api_key"),
+        db.Index("idx_esp32_factory_api_key", "factory_api_key"),
     )
