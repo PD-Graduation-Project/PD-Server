@@ -297,7 +297,7 @@ def complete_test(test_id):
 
         for step in ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10"]:
             step_key = f"step_{step}"
-            if config.get(step_key, True):
+            if config.get(step_key, False):
                 expected_count += 2
                 for hand in ["l", "r"]:
                     expected_file = f"{test_id}_{step}_{hand}.txt"
@@ -313,6 +313,19 @@ def complete_test(test_id):
         expected_count = 1
         if uploaded_count < 1:
             missing.append("voice recording")
+
+    if missing:
+        return (
+            jsonify(
+                {
+                    "error": "Missing required subtest uploads",
+                    "missing": missing,
+                    "expected_count": expected_count,
+                    "uploaded_count": uploaded_count,
+                }
+            ),
+            400,
+        )
 
     test_session.status = "completed"
     test_session.completed_at = datetime.utcnow()
