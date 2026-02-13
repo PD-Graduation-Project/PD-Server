@@ -1,5 +1,7 @@
 import datetime
 import secrets
+from datetime import timezone
+from typing import Any, cast
 
 from flask import Blueprint, g, jsonify, request
 from werkzeug.security import check_password_hash, generate_password_hash
@@ -14,6 +16,7 @@ from schemas.auth_schema import (
     SessionSchema,
 )
 from utils.token import generate_access_token
+from utils.validation import get_json_body
 
 auth_bp = Blueprint("auth", __name__, url_prefix="/api/auth")
 
@@ -45,7 +48,7 @@ def generate_refresh_token(user_id, device_info=None, ip_address=None):
     refresh_token = RefreshToken(
         user_id=user_id,
         token_hash=token_hash,
-        expires_at=datetime.datetime.utcnow() + REFRESH_TOKEN_EXPIRY,
+        expires_at=datetime.datetime.now(timezone.utc) + REFRESH_TOKEN_EXPIRY,
         device_info=device_info,
         ip_address=ip_address,
     )
@@ -64,7 +67,7 @@ def verify_refresh_token(token, user_id):
         valid_tokens = RefreshToken.query.filter(
             RefreshToken.user_id == user_id,
             RefreshToken.revoked.is_(False),
-            RefreshToken.expires_at > datetime.datetime.utcnow(),
+            RefreshToken.expires_at > datetime.datetime.now(timezone.utc),
         ).all()
 
         for db_token in valid_tokens:
@@ -78,10 +81,14 @@ def verify_refresh_token(token, user_id):
 
 @auth_bp.route("/register", methods=["POST"])
 def register():
-    # Use Schema for validation
     schema = RegisterSchema()
+    raw_body, error = get_json_body(request)
+    if error:
+        return error
+    assert raw_body is not None
+
     try:
-        data = schema.load(request.get_json())
+        data = cast(dict[str, Any], schema.load(raw_body))
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
@@ -106,8 +113,13 @@ def register():
 @auth_bp.route("/login", methods=["POST"])
 def login():
     schema = LoginSchema()
+    raw_body, error = get_json_body(request)
+    if error:
+        return error
+    assert raw_body is not None
+
     try:
-        data = schema.load(request.get_json())
+        data = cast(dict[str, Any], schema.load(raw_body))
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
@@ -131,8 +143,13 @@ def login():
 @authenticate
 def refresh():
     schema = RefreshSchema()
+    raw_body, error = get_json_body(request)
+    if error:
+        return error
+    assert raw_body is not None
+
     try:
-        data = schema.load(request.get_json())
+        data = cast(dict[str, Any], schema.load(raw_body))
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
@@ -161,8 +178,13 @@ def refresh():
 @authenticate
 def logout():
     schema = RefreshSchema()
+    raw_body, error = get_json_body(request)
+    if error:
+        return error
+    assert raw_body is not None
+
     try:
-        data = schema.load(request.get_json())
+        data = cast(dict[str, Any], schema.load(raw_body))
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
@@ -192,7 +214,7 @@ def logout_all():
 def get_sessions():
     sessions = (
         RefreshToken.query.filter_by(user_id=g.user_id, revoked=False)
-        .filter(RefreshToken.expires_at > datetime.datetime.utcnow())
+        .filter(RefreshToken.expires_at > datetime.datetime.now(timezone.utc))
         .all()
     )
 

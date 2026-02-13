@@ -1,9 +1,12 @@
+from typing import Any, cast
+
 from flask import Blueprint, g, jsonify, request
 
 from middleware.authenticate import authenticate
 from models.database import db
 from models.user import User
 from schemas.user_schema import UserDemographicsSchema
+from utils.validation import get_json_body
 
 user_bp = Blueprint("user", __name__, url_prefix="/api/user")
 
@@ -28,17 +31,15 @@ def update_user():
     current_user = db.session.get(User, g.user_id)
     if not current_user:
         return jsonify({"error": "User not found"}), 404
+
+    schema = UserDemographicsSchema()
+    raw_body, error = get_json_body(request)
+    if error:
+        return error
+    assert raw_body is not None
+
     try:
-        schema = UserDemographicsSchema()
-        data = schema.load(request.get_json())  # validate request data
-
-        for key, value in data.items():
-            setattr(current_user, key, value)
-
-        db.session.commit()
-
-        return jsonify({"success": True, "data": schema.dump(current_user)}), 200
-
+        data = cast(dict[str, Any], schema.load(raw_body))
     except Exception as e:
         return (
             jsonify(
@@ -46,6 +47,13 @@ def update_user():
             ),
             400,
         )
+
+    for key, value in data.items():
+        setattr(current_user, key, value)
+
+    db.session.commit()
+
+    return jsonify({"success": True, "data": schema.dump(current_user)}), 200
 
 
 @user_bp.route("/reset", methods=["POST"])

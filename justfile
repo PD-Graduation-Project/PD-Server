@@ -45,7 +45,7 @@ format:
     ruff check --fix . && isort .
 
 typecheck:
-    mypy .
+    pyright .
 
 # Install dependencies
 install:

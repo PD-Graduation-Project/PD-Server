@@ -1,3 +1,5 @@
+from typing import Any, cast
+
 from flask import Blueprint, g, jsonify, request
 from sqlalchemy.orm import selectinload
 
@@ -7,6 +9,7 @@ from models.test_models import TestSession
 from models.user import User
 from schemas.test_schema import CreateTestSchema, TestListQuerySchema, TestSessionSchema
 from utils.esp32_connection_manager import connection_manager
+from utils.validation import get_json_body, get_query_params
 
 test_bp = Blueprint("test", __name__, url_prefix="/api/tests")
 
@@ -15,8 +18,13 @@ test_bp = Blueprint("test", __name__, url_prefix="/api/tests")
 @authenticate
 def create_test():
     schema = CreateTestSchema()
+    raw_body, error = get_json_body(request)
+    if error:
+        return error
+    assert raw_body is not None
+
     try:
-        data = schema.load(request.get_json())
+        data = cast(dict[str, Any], schema.load(raw_body))
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 400
 
@@ -72,7 +80,7 @@ def create_test():
 def list_tests():
     schema = TestListQuerySchema()
     try:
-        params = schema.load(request.args)
+        params = cast(dict[str, Any], schema.load(get_query_params(request)))
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 400
 
@@ -81,7 +89,7 @@ def list_tests():
         return jsonify({"error": "User not found"}), 404
 
     query = TestSession.query.filter_by(user_id=current_user.id).options(
-        selectinload(TestSession.inputs)
+        selectinload(TestSession.inputs)  # type: ignore[arg-type]
     )
 
     if params.get("test_type"):

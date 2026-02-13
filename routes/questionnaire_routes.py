@@ -3,6 +3,7 @@ from flask import Blueprint, g, jsonify, request
 from middleware.authenticate import authenticate
 from models.database import db
 from models.user import User
+from utils.validation import get_json_body
 
 questionnaire_bp = Blueprint("questionnaire", __name__, url_prefix="/api/questionnaire")
 
@@ -31,14 +32,16 @@ def patch_questionnaire():
     current_user = db.session.get(User, g.user_id)
     if not current_user:
         return jsonify({"error": "User not found"}), 404
-    try:
-        data = request.get_json()
-        if not data:
-            return jsonify({"success": False, "error": "No data"}), 400
 
+    raw_body, error = get_json_body(request)
+    if error:
+        return error
+    assert raw_body is not None
+
+    try:
         updated_fields = []
 
-        for key, value in data.items():
+        for key, value in raw_body.items():
             if key in QUESTION_IDS:
                 if value is not None and not isinstance(value, bool):
                     return (

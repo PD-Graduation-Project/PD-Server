@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 
 from flask import Blueprint, g, jsonify, request
 
@@ -65,7 +65,7 @@ def upload_tremor(test_id):
         return jsonify({"error": "No file provided"}), 400
 
     file = request.files["file"]
-    if file.filename == "":
+    if not file.filename:
         return jsonify({"error": "No file selected"}), 400
 
     if not is_allowed_file(file.filename, "tremor"):
@@ -139,7 +139,7 @@ def upload_drawings(test_id):
     for hand, field_name in [("l", "spiral_left"), ("r", "spiral_right")]:
         file = request.files[field_name]
 
-        if file.filename == "":
+        if not file.filename:
             return jsonify({"error": f"No file selected for {field_name}"}), 400
 
         if not is_allowed_file(file.filename, "drawing"):
@@ -219,7 +219,7 @@ def upload_voice(test_id):
         return jsonify({"error": "No audio file provided"}), 400
 
     file = request.files["audio"]
-    if file.filename == "":
+    if not file.filename:
         return jsonify({"error": "No file selected"}), 400
 
     if not is_allowed_file(file.filename, "voice"):
@@ -328,7 +328,7 @@ def complete_test(test_id):
         )
 
     test_session.status = "completed"
-    test_session.completed_at = datetime.utcnow()
+    test_session.completed_at = datetime.now(timezone.utc)
 
     ml_score = None
     if test_session.test_type == "tremor":
