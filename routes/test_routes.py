@@ -1,4 +1,5 @@
 from flask import Blueprint, g, jsonify, request
+from sqlalchemy.orm import selectinload
 
 from middleware.authenticate import authenticate
 from models.database import db
@@ -79,7 +80,9 @@ def list_tests():
     if not current_user:
         return jsonify({"error": "User not found"}), 404
 
-    query = TestSession.query.filter_by(user_id=current_user.id)
+    query = TestSession.query.filter_by(user_id=current_user.id).options(
+        selectinload(TestSession.inputs)
+    )
 
     if params.get("test_type"):
         query = query.filter_by(test_type=params["test_type"])

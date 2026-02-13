@@ -7,3 +7,12 @@ use_parentheses = true
 
 [tool.black]
 line-length = 88
+
+[tool.pyright]
+typeCheckingMode = "basic"
+
+[tool.pyright.diagnosticSeverityOverrides]
+reportGeneralTypeIssues = "warning"
+reportUnknownMemberType = "none"
+reportUnknownVariableType = "none"
+reportUnknownArgumentType = "none"
