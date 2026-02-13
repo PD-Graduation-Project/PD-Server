@@ -9,9 +9,6 @@ from ml.voice_model import predict_voice
 
 __all__ = [
     "predict_tremor",
-    "predict_tremor_with_confidence",
     "predict_drawing",
-    "predict_drawing_with_confidence",
     "predict_voice",
-    "predict_voice_with_confidence",
 ]
