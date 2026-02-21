@@ -22,13 +22,26 @@ DEVICE_TIMEOUT_SECONDS = 60
 def register_device():
     """
     ESP32 registration endpoint.
-    ESP32 calls this on first boot with factory API key.
+    ESP32 calls this on first boot with factory API key and sends device_id in body.
     Returns a production API key for future authentication.
     """
+    from flask import request
+
+    data = request.get_json() or {}
+    device_id = data.get("device_id")
+
+    if not device_id:
+        return jsonify({"error": "device_id is required in body"}), 400
+
     device = g.esp32_device
 
-    # If device already has a production key, return it
+    if device.device_id and device.device_id != device_id:
+        return jsonify({"error": "Device ID mismatch"}), 400
+
+    device.device_id = device_id
+
     if device.api_key:
+        db.session.commit()
         return (
             jsonify(
                 {

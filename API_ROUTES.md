@@ -19,6 +19,22 @@
   }
   ```
 
+- **Example Response**:
+
+  ```json
+  {
+    "message": "Success",
+    "access_token": "eyJ...",
+    "refresh_token": "eyJ...",
+    "token_type": "Bearer",
+    "expires_in": 900,
+    "user": {
+      "id": 1,
+      "email": "user@example.com"
+    }
+  }
+  ```
+
 ### `POST /api/auth/login`
 
 - **Description**: Authenticate user and return auth token
@@ -26,7 +42,7 @@
 - **Response**:
   - Success (200): JSON object with message, auth token, and user data
   - Error (400): Missing email or password
-  - Error (401): Invalid email or password
+  - Error (401): Invalid credentials
 - **Example Request**:
 
   ```json
@@ -44,6 +60,23 @@
 - **Response**:
   - Success (200): New access token
   - Error (401): Invalid or expired refresh token
+- **Example Request**:
+
+  ```json
+  {
+    "refresh_token": "eyJ..."
+  }
+  ```
+
+- **Example Response**:
+
+  ```json
+  {
+    "access_token": "eyJ...",
+    "token_type": "Bearer",
+    "expires_in": 900
+  }
+  ```
 
 ### `POST /api/auth/logout`
 
@@ -165,8 +198,8 @@
           "test_type": "tremor",
           "status": "completed",
           "device_source": "esp32",
-      "config": {"step_0": true},
-      "created_at": "2026-02-09T10:00:00Z",
+          "config": {"step_0": true},
+          "created_at": "2026-02-09T10:00:00Z",
           "completed_at": "2026-02-09T10:00:30Z",
           "ml_score": 0.72,
           "inputs": []
@@ -227,35 +260,13 @@
   - `X-Device-API-Key` header for ESP32 uploads
 - **Request**: `multipart/form-data`
   - `file` (required): TXT file with gyro data
-  - `subtest` (required): Subtest name (`0`, `1`, `2`, `3`, `4`, `5`, `6`, `7`, `8`, `9`, `10`)
+  - `subtest` (required): Subtest name (`0` to `10`)
   - `hand` (required): Hand (`l` for left, `r` for right)
 - **Response**:
   - Success (200): File uploaded, TestInput created
   - Error (400): Missing file, invalid subtest, or invalid hand
   - Error (401): Unauthorized
   - Error (403): Forbidden (test belongs to another user)
-- **Example Request**:
-
-  ```
-  POST /api/tests/1/tremor
-  Content-Type: multipart/form-data
-
-  --boundary
-  Content-Disposition: form-data; name="file"; filename="data.txt"
-  Content-Type: text/plain
-
-  <gyro data>
-  --boundary
-  Content-Disposition: form-data; name="subtest"
-
-  0
-  --boundary
-  Content-Disposition: form-data; name="hand"
-
-  l
-  --boundary--
-  ```
-
 - **Example Response**:
 
   ```json
@@ -282,6 +293,7 @@
   - Success (200): Both images uploaded
   - Error (400): Missing one or both images
   - Error (401): Unauthorized
+  - Error (403): Forbidden (test belongs to another user)
 - **Example Response**:
 
   ```json
@@ -316,6 +328,7 @@
   - Success (200): Audio uploaded
   - Error (400): No audio file provided
   - Error (401): Unauthorized
+  - Error (403): Forbidden (test belongs to another user)
 - **Example Response**:
 
   ```json
@@ -331,14 +344,15 @@
 
 ### `POST /api/tests/<test_id>/complete`
 
-- **Description**: Mark a test as completed (used by ESP32 after all gyro files uploaded)
+- **Description**: Mark a test as completed. Runs ML model to generate score.
 - **Authentication**:
   - JWT Bearer token for mobile
   - `X-Device-API-Key` header for ESP32
 - **Response**:
-  - Success (200): Test completed
+  - Success (200): Test completed, ml_score generated
   - Error (400): Already completed or no uploads yet
   - Error (401): Unauthorized
+  - Error (403): Forbidden (test belongs to another user)
 - **Example Response**:
 
   ```json
@@ -347,6 +361,7 @@
     "data": {
       "message": "Test completed",
       "status": "completed",
+      "ml_score": 0.72,
       "uploaded_count": 20,
       "expected_count": 20,
       "missing": []
@@ -365,9 +380,10 @@
   - `name` (optional): User-friendly name for the device
 - **Response**:
   - Success (200): Device paired successfully
-  - Error (400): Missing device_id or invalid device
+  - Error (400): Missing device_id
   - Error (401): Invalid or missing token
   - Error (404): Device not found in database
+  - Error (409): Device already paired to another user
 - **Example Request**:
 
   ```json
@@ -410,16 +426,19 @@
         "device_id": "ESP32-001234",
         "name": "My Tremor Sensor",
         "is_connected": true,
+        "last_seen_at": "2026-02-09T10:00:00Z",
         "created_at": "2026-02-09T10:00:00Z"
       }
     ]
   }
   ```
 
-### `DELETE /api/esp32-devices/<device_id>`
+### `DELETE /api/esp32-devices/<db_id>`
 
 - **Description**: Unpair an ESP32 device from the current user's account
 - **Headers**: `Authorization: Bearer <token>`
+- **URL Parameters**:
+  - `db_id` (required): The database ID of the device (not the device_id string)
 - **Response**:
   - Success (200): Device unpaired
   - Error (401): Invalid or missing token
@@ -440,14 +459,15 @@ These routes are used by the ESP32 device itself, not by the mobile app.
 ### `POST /api/esp32/register`
 
 - **Description**: Register ESP32 device and receive production API key
+- **Authentication**: Factory API key in header
 - **Headers**: `X-Device-API-Key: <factory_api_key>`
 - **Request Body**: JSON object
   - `device_id` (required): Device ID (e.g., `ESP32-001234`)
 - **Response**:
   - Success (200): Device registered, returns production API key
   - Error (401): Invalid factory API key
-  - Error (400): Invalid request
-- **Note**: Called automatically by ESP32 on first boot. Factory API key is pre-programmed in firmware and database.
+  - Error (400): Missing device_id or device ID mismatch
+- **Note**: Called automatically by ESP32 on first boot. Factory API key is pre-programmed in firmware.
 - **Example Request**:
 
   ```json
@@ -474,16 +494,18 @@ These routes are used by the ESP32 device itself, not by the mobile app.
 - **Headers**: `X-Device-API-Key: <production_api_key>`
 - **Response**: SSE stream (HTTP 200, connection kept open)
 - **SSE Events**:
+  - `connected`: Initial connection event
   - `test_started`: When mobile app starts a tremor test for this device's user
   - `heartbeat`: Periodic keep-alive event (every 30 seconds)
-- **Example Event**:
+- **Example Events**:
 
   ```
+  event: connected
+  data: {"device_id": "ESP32-001234"}
+
   event: test_started
   data: {"test_id": 5, "test_type": "tremor", "config": {"step_0": true, "step_1": true}}
-  ```
 
-  ```
   event: heartbeat
   data: {"timestamp": "2026-02-09T10:00:00Z"}
   ```
@@ -495,6 +517,7 @@ These routes are used by the ESP32 device itself, not by the mobile app.
 - **Response**:
   - Success (200): Heartbeat recorded
   - Error (401): Invalid API key
+  - Error (403): Device not paired to any user
 - **Example Response**:
 
   ```json
@@ -503,47 +526,6 @@ These routes are used by the ESP32 device itself, not by the mobile app.
     "message": "Heartbeat received"
   }
   ```
-
-## ESP32 Data Upload Routes (`/api/esp32/tests/<test_id>`)
-
-**Note**: These routes are deprecated in favor of the standard `/api/tests/{id}/tremor` and `/api/tests/{id}/complete` routes. ESP32 can use either endpoint.
-
-### `POST /api/esp32/tests/<test_id>/data` (Deprecated)
-
-Use `/api/tests/{id}/tremor` instead.
-
-### `POST /api/esp32/tests/<test_id>/complete` (Deprecated)
-
-Use `/api/tests/{id}/complete` instead.
-
-## ESP32 Authentication Flow
-
-### Pairing Flow (User Action)
-
-1. User sees sticker on ESP32: `Device ID: ESP32-001234`
-2. User opens mobile app → "Pair Device"
-3. User types: `ESP32-001234`
-4. Optionally names: "My Sensor"
-5. Server links device to user account
-6. Done!
-
-### ESP32 Registration Flow (Automatic)
-
-1. ESP32 boots with factory API key pre-programmed
-2. ESP32 calls `POST /api/esp32/register` with factory key
-3. Server validates factory key, generates production API key
-4. ESP32 stores production key in flash
-5. ESP32 connects to `GET /api/esp32/stream`
-6. ESP32 ready to receive test_started events
-
-### Data Flow During Test
-
-1. Mobile app creates tremor test: `POST /api/tests`
-2. Server looks up user's paired ESP32 device
-3. Server sends SSE event to ESP32: `test_started`
-4. ESP32 collects gyro data, uploads via `POST /api/tests/{id}/tremor`
-5. ESP32 calls `POST /api/tests/{id}/complete`
-6. Mobile app polls `GET /api/tests/{id}` for results
 
 ## User Routes (`/api/user`)
 
@@ -561,9 +543,9 @@ Use `/api/tests/{id}/complete` instead.
 - **Description**: Update user demographics
 - **Headers**: `Authorization: Bearer <token>`
 - **Request Body**: JSON object with fields to update
-  - `age`, `height`, `weight`, `gender`
-  - `pd_appearance_in_kinship`, `pd_appearance_in_first_grade_kinship`
-  - `Q01` - `Q28`: Questionnaire responses (boolean)
+  - Demographics: `age`, `height`, `weight`, `gender`
+  - PD Info: `pd_appearance_in_kinship`, `pd_appearance_in_first_grade_kinship`
+  - Questionnaire: `Q01` - `Q28` (boolean)
 - **Response**:
   - Success (200): Updated user data
   - Error (400): Validation failed
@@ -571,10 +553,11 @@ Use `/api/tests/{id}/complete` instead.
 
 ### `POST /api/user/reset`
 
-- **Description**: Reset user data (demographics and questionnaire)
+- **Description**: Reset user data (demographics only, not questionnaire)
 - **Headers**: `Authorization: Bearer <token>`
 - **Response**:
   - Success (200): User data reset
+  - Error (401): Invalid or missing token
 
 ### `DELETE /api/user`
 
@@ -582,6 +565,7 @@ Use `/api/tests/{id}/complete` instead.
 - **Headers**: `Authorization: Bearer <token>`
 - **Response**:
   - Success (200): Account deleted
+  - Error (401): Invalid or missing token
 
 ## Questionnaire Routes (`/api/questionnaire`)
 
@@ -620,52 +604,6 @@ Use `/api/tests/{id}/complete` instead.
   - Success (200): Updated fields list
   - Error (400): Invalid data or no valid fields
 
-## ESP32 SSE Stream Routes
-
-### `GET /api/esp32/stream`
-
-- **Description**: Server-Sent Events stream for ESP32 devices
-- **Headers**: `X-Device-API-Key: <api_key>`
-- **Response**: SSE stream for receiving `test_started` events
-- **Example Event**:
-
-  ```
-  event: test_started
-  data: {"test_id": 1, "test_type": "tremor", "config": {"step_0": true, "step_2": false}}
-  ```
-
-### `POST /api/esp32/tests/<test_id>/data`
-
-- **Description**: Upload gyro data for a test session
-- **Headers**: `X-Device-API-Key: <api_key>`
-- **Request Body**: JSON object
-
-  ```json
-  {
-    "gyro_data": [[x, y, z, timestamp], ...],
-    "sample_rate_hz": 100,
-    "duration_seconds": 30
-  }
-  ```
-
-- **Response**:
-  - Success (200): Data received
-  - Error (401): Invalid API key
-
-### `POST /api/esp32/tests/<test_id>/complete`
-
-- **Description**: Signal test completion
-- **Headers**: `X-Device-API-Key: <api_key>`
-- **Response**:
-  - Success (200): Test completed
-
-### `POST /api/esp32/heartbeat`
-
-- **Description**: Report ESP32 online status
-- **Headers**: `X-Device-API-Key: <api_key>`
-- **Response**:
-  - Success (200): Heartbeat received
-
 ## Health Check Route
 
 ### `GET /health`
@@ -678,13 +616,13 @@ Use `/api/tests/{id}/complete` instead.
 
 - **400**: Returns `{"success": false, "error": "..."}`
 - **401**: Returns `{"error": "..."}`
-- **403**: Returns `{"error": "Forbidden"}`
+- **403**: Returns `{"error": "Forbidden"}` or `{"error": "..."}`
 - **404**: Returns `{"error": "Not found"}`
 - **500**: Returns `{"error": "Internal server error"}`
 
 ## Configuration
 
-- JWT access tokens expire after 15 minutes
+- JWT access tokens expire after 15 minutes (900 seconds)
 - JWT refresh tokens expire after 30 days
 - Maximum file upload size: 16MB
 - Allowed file extensions:
@@ -723,3 +661,21 @@ Available tremor test steps (controlled via `config`):
 - Mobile handles drawing + voice tests (user input)
 - Different authentication (API key vs JWT)
 - Separate route namespaces for clarity
+
+## Authentication Summary
+
+| Route | Auth Type | Header |
+|-------|-----------|--------|
+| `/api/auth/*` | None | - |
+| `/api/tests` | JWT | `Authorization: Bearer <token>` |
+| `/api/tests/<id>/tremor` | JWT or ESP32 | `Authorization: Bearer <token>` or `X-Device-API-Key: <key>` |
+| `/api/tests/<id>/complete` | JWT or ESP32 | `Authorization: Bearer <token>` or `X-Device-API-Key: <key>` |
+| `/api/tests/<id>/drawings` | JWT | `Authorization: Bearer <token>` |
+| `/api/tests/<id>/voice` | JWT | `Authorization: Bearer <token>` |
+| `/api/esp32-devices/*` | JWT | `Authorization: Bearer <token>` |
+| `/api/esp32/register` | Factory Key | `X-Device-API-Key: <factory_key>` |
+| `/api/esp32/stream` | Production Key | `X-Device-API-Key: <api_key>` |
+| `/api/esp32/heartbeat` | Production Key | `X-Device-API-Key: <api_key>` |
+| `/api/user/*` | JWT | `Authorization: Bearer <token>` |
+| `/api/questionnaire/*` | JWT | `Authorization: Bearer <token>` |
+| `/health` | None | - |
