@@ -134,6 +134,58 @@ def delete_file(file_path: str) -> bool:
         return False
 
 
+def save_imu_data(
+    test_type: str,
+    test_id: int,
+    filename: str,
+    imu_data: dict,
+) -> tuple[str, int]:
+    """
+    Save IMU data arrays to a CSV-style TXT file.
+
+    Format:
+        const,ax,ay,az,gx,gy,gz
+        0,ax0,ay0,az0,gx0,gy0,gz0
+        1,ax1,ay1,az1,gx1,gy1,gz1
+        ...
+
+    Args:
+        test_type: Type of test (tremor)
+        test_id: Test session ID
+        filename: Name of the file
+        imu_data: Dict with keys ax, ay, az, gx, gy, gz (each a list of floats)
+
+    Returns:
+        tuple: (file_path, file_size)
+    """
+    upload_dir = get_upload_path(test_type, test_id)
+    upload_dir.mkdir(parents=True, exist_ok=True)
+
+    safe_filename = secure_filename(filename)
+    file_path = upload_dir / safe_filename
+
+    ax = imu_data.get("ax", [])
+    ay = imu_data.get("ay", [])
+    az = imu_data.get("az", [])
+    gx = imu_data.get("gx", [])
+    gy = imu_data.get("gy", [])
+    gz = imu_data.get("gz", [])
+
+    num_samples = len(ax)
+
+    if not (len(ay) == len(ax) == len(az) == len(gx) == len(gy) == len(gz)):
+        raise ValueError("All IMU arrays must have the same length")
+
+    with open(file_path, "w") as f:
+        f.write("const,ax,ay,az,gx,gy,gz\n")
+        for i in range(num_samples):
+            f.write(f"{i},{ax[i]},{ay[i]},{az[i]},{gx[i]},{gy[i]},{gz[i]}\n")
+
+    file_size = os.path.getsize(file_path)
+
+    return str(file_path), file_size
+
+
 def cleanup_test_directory(test_type: str, test_id: int) -> bool:
     """Remove the test directory and all its contents."""
     try:

@@ -14,6 +14,7 @@ from utils.storage import (
     get_expires_at,
     get_file_extension,
     is_allowed_file,
+    save_imu_data,
     save_uploaded_file,
     validate_file_size,
     validate_hand,
@@ -26,7 +27,12 @@ upload_bp = Blueprint("upload", __name__, url_prefix="/api/tests")
 @upload_bp.route("/<int:test_id>/tremor", methods=["POST"])
 @authenticate_jwt_or_esp32
 def upload_tremor(test_id):
-    """Upload gyro TXT file for tremor test."""
+    """Upload gyro data for tremor test.
+
+    Accepts either:
+    - multipart/form-data with file upload
+    - JSON body with IMU data arrays
+    """
     current_user = db.session.get(User, g.user_id)
     if not current_user:
         return jsonify({"error": "User not found"}), 404
@@ -41,6 +47,107 @@ def upload_tremor(test_id):
     if test_session.test_type != "tremor":
         return jsonify({"error": "Test is not a tremor test"}), 400
 
+    content_type = request.content_type or ""
+
+    if "application/json" in content_type or request.get_json(silent=True):
+        return _upload_tremor_json(test_id, test_session)
+    else:
+        return _upload_tremor_file(test_id, test_session)
+
+
+def _upload_tremor_json(test_id, test_session):
+    """Handle JSON body upload with IMU data arrays."""
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "Invalid JSON body"}), 400
+
+    subtest = data.get("subtest_id") or data.get("subtest")
+    hand_raw = data.get("hand")
+    imu_data = data.get("imu_data")
+
+    if not subtest:
+        return jsonify({"error": "subtest_id is required"}), 400
+
+    if not hand_raw:
+        return jsonify({"error": "hand is required"}), 400
+
+    hand = (
+        "l"
+        if hand_raw.lower() in ("left", "l")
+        else "r" if hand_raw.lower() in ("right", "r") else None
+    )
+    if not hand:
+        return (
+            jsonify({"error": "Invalid hand: must be 'left', 'right', 'l', or 'r'"}),
+            400,
+        )
+
+    if not imu_data or not isinstance(imu_data, dict):
+        return jsonify({"error": "imu_data is required and must be an object"}), 400
+
+    required_keys = {"ax", "ay", "az", "gx", "gy", "gz"}
+    if not required_keys.issubset(imu_data.keys()):
+        missing = required_keys - imu_data.keys()
+        return jsonify({"error": f"imu_data missing keys: {', '.join(missing)}"}), 400
+
+    for key in required_keys:
+        if not isinstance(imu_data[key], list):
+            return jsonify({"error": f"imu_data.{key} must be an array"}), 400
+
+    if not validate_tremor_subtest(str(subtest)):
+        return jsonify({"error": f"Invalid subtest: {subtest}"}), 400
+
+    config = test_session.config or {}
+    step_key = f"step_{subtest}"
+    if config and not config.get(step_key, True):
+        return (
+            jsonify({"error": f"Subtest {subtest} is not enabled for this test"}),
+            400,
+        )
+
+    subtest_str = str(subtest)
+    filename = generate_tremor_filename(test_id, subtest_str, hand)
+
+    try:
+        file_path, file_size = save_imu_data("tremor", test_id, filename, imu_data)
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+
+    test_input = TestInput(
+        test_session_id=test_id,
+        input_type="tremor_gyro",
+        file_path=file_path,
+        original_filename=filename,
+        mime_type="text/plain",
+        file_size=file_size,
+        expires_at=get_expires_at(),
+    )
+    db.session.add(test_input)
+
+    if test_session.status == "pending":
+        test_session.status = "in_progress"
+
+    db.session.commit()
+
+    return (
+        jsonify(
+            {
+                "success": True,
+                "data": {
+                    "id": test_input.id,
+                    "input_type": "tremor_gyro",
+                    "subtest": subtest_str,
+                    "hand": hand,
+                    "file_path": file_path,
+                },
+            }
+        ),
+        200,
+    )
+
+
+def _upload_tremor_file(test_id, test_session):
+    """Handle multipart/form-data file upload."""
     subtest = request.form.get("subtest")
     hand = request.form.get("hand")
 

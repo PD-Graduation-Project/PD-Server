@@ -95,7 +95,7 @@ class TestQuestionnaireRoutes:
         assert response.status_code == 400
         data = response.get_json()
         assert data["success"] is False
-        assert "No data" in data["error"]
+        assert "No valid fields provided" in data["error"]
 
     def test_patch_questionnaire_with_no_valid_fields_returns_400(
         self, client, auth_headers, test_user

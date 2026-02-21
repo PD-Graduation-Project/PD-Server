@@ -298,6 +298,220 @@ class TestUploadTremor:
         assert response.status_code == 401
 
 
+class TestUploadTremorJson:
+    """Tests for JSON body upload with IMU data."""
+
+    def test_upload_tremor_json_success(self, client, auth_headers, tremor_session):
+        """Test uploading tremor data via JSON with IMU arrays."""
+        imu_data = {
+            "subtest_id": "0",
+            "hand": "left",
+            "imu_data": {
+                "ax": [0.1, 0.2, 0.3],
+                "ay": [0.1, 0.2, 0.3],
+                "az": [9.8, 9.9, 10.0],
+                "gx": [0.01, 0.02, 0.03],
+                "gy": [0.01, 0.02, 0.03],
+                "gz": [0.01, 0.02, 0.03],
+            },
+        }
+        response = client.post(
+            f"/api/tests/{tremor_session.id}/tremor",
+            json=imu_data,
+            headers=auth_headers,
+        )
+        assert response.status_code == 200
+        result = response.get_json()
+        assert result["success"] is True
+        assert result["data"]["subtest"] == "0"
+        assert result["data"]["hand"] == "l"
+        assert result["data"]["input_type"] == "tremor_gyro"
+
+    def test_upload_tremor_json_right_hand(self, client, auth_headers, tremor_session):
+        """Test uploading tremor data with right hand."""
+        imu_data = {
+            "subtest_id": "1",
+            "hand": "right",
+            "imu_data": {
+                "ax": [0.1, 0.2],
+                "ay": [0.1, 0.2],
+                "az": [9.8, 9.9],
+                "gx": [0.01, 0.02],
+                "gy": [0.01, 0.02],
+                "gz": [0.01, 0.02],
+            },
+        }
+        response = client.post(
+            f"/api/tests/{tremor_session.id}/tremor",
+            json=imu_data,
+            headers=auth_headers,
+        )
+        assert response.status_code == 200
+        result = response.get_json()
+        assert result["data"]["hand"] == "r"
+
+    def test_upload_tremor_json_hand_letter(self, client, auth_headers, tremor_session):
+        """Test uploading with single letter hand (l/r)."""
+        imu_data = {
+            "subtest_id": "0",
+            "hand": "r",
+            "imu_data": {
+                "ax": [0.1],
+                "ay": [0.1],
+                "az": [9.8],
+                "gx": [0.01],
+                "gy": [0.01],
+                "gz": [0.01],
+            },
+        }
+        response = client.post(
+            f"/api/tests/{tremor_session.id}/tremor",
+            json=imu_data,
+            headers=auth_headers,
+        )
+        assert response.status_code == 200
+        assert response.get_json()["data"]["hand"] == "r"
+
+    def test_upload_tremor_json_missing_imu_data(
+        self, client, auth_headers, tremor_session
+    ):
+        """Test that missing imu_data returns 400."""
+        imu_data = {
+            "subtest_id": "0",
+            "hand": "left",
+        }
+        response = client.post(
+            f"/api/tests/{tremor_session.id}/tremor",
+            json=imu_data,
+            headers=auth_headers,
+        )
+        assert response.status_code == 400
+        assert "imu_data" in response.get_json()["error"]
+
+    def test_upload_tremor_json_missing_keys(
+        self, client, auth_headers, tremor_session
+    ):
+        """Test that missing keys in imu_data returns 400."""
+        imu_data = {
+            "subtest_id": "0",
+            "hand": "left",
+            "imu_data": {
+                "ax": [0.1],
+                "ay": [0.1],
+                "az": [9.8],
+            },
+        }
+        response = client.post(
+            f"/api/tests/{tremor_session.id}/tremor",
+            json=imu_data,
+            headers=auth_headers,
+        )
+        assert response.status_code == 400
+        assert "gx" in response.get_json()["error"]
+
+    def test_upload_tremor_json_array_mismatch(
+        self, client, auth_headers, tremor_session
+    ):
+        """Test that mismatched array lengths returns 400."""
+        imu_data = {
+            "subtest_id": "0",
+            "hand": "left",
+            "imu_data": {
+                "ax": [0.1, 0.2],
+                "ay": [0.1],
+                "az": [9.8],
+                "gx": [0.01],
+                "gy": [0.01],
+                "gz": [0.01],
+            },
+        }
+        response = client.post(
+            f"/api/tests/{tremor_session.id}/tremor",
+            json=imu_data,
+            headers=auth_headers,
+        )
+        assert response.status_code == 400
+
+    def test_upload_tremor_json_invalid_hand(
+        self, client, auth_headers, tremor_session
+    ):
+        """Test that invalid hand returns 400."""
+        imu_data = {
+            "subtest_id": "0",
+            "hand": "invalid",
+            "imu_data": {
+                "ax": [0.1],
+                "ay": [0.1],
+                "az": [9.8],
+                "gx": [0.01],
+                "gy": [0.01],
+                "gz": [0.01],
+            },
+        }
+        response = client.post(
+            f"/api/tests/{tremor_session.id}/tremor",
+            json=imu_data,
+            headers=auth_headers,
+        )
+        assert response.status_code == 400
+
+    def test_upload_tremor_json_unauthorized(self, client, tremor_session):
+        """Test that unauthorized request returns 401."""
+        imu_data = {
+            "subtest_id": "0",
+            "hand": "left",
+            "imu_data": {
+                "ax": [0.1],
+                "ay": [0.1],
+                "az": [9.8],
+                "gx": [0.01],
+                "gy": [0.01],
+                "gz": [0.01],
+            },
+        }
+        response = client.post(
+            f"/api/tests/{tremor_session.id}/tremor",
+            json=imu_data,
+        )
+        assert response.status_code == 401
+
+    def test_upload_tremor_json_esp32_key(
+        self, client, esp32_api_key_headers, tremor_session
+    ):
+        """Test uploading with ESP32 API key authentication."""
+        imu_data = {
+            "subtest_id": "0",
+            "hand": "left",
+            "imu_data": {
+                "ax": [0.1, 0.2, 0.3],
+                "ay": [0.1, 0.2, 0.3],
+                "az": [9.8, 9.9, 10.0],
+                "gx": [0.01, 0.02, 0.03],
+                "gy": [0.01, 0.02, 0.03],
+                "gz": [0.01, 0.02, 0.03],
+            },
+        }
+        # First need to pair the device to the user
+        with client.application.app_context():
+            from models.test_models import ESP32Device
+
+            device = ESP32Device(
+                device_id="ESP32-TEST",
+                user_id=tremor_session.user_id,
+                factory_api_key="test_factory",
+                api_key=esp32_api_key_headers["X-Device-API-Key"],
+            )
+            db.session.add(device)
+            db.session.commit()
+
+        response = client.post(
+            f"/api/tests/{tremor_session.id}/tremor",
+            json=imu_data,
+            headers=esp32_api_key_headers,
+        )
+        assert response.status_code == 200
+
+
 class TestUploadDrawings:
     def test_upload_drawings_success(self, client, auth_headers, drawing_session):
         import io

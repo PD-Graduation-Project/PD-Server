@@ -254,19 +254,59 @@
 
 ### `POST /api/tests/<test_id>/tremor`
 
-- **Description**: Upload a gyro TXT file for a tremor test
+- **Description**: Upload gyro data for a tremor test
 - **Authentication**:
   - JWT Bearer token for mobile uploads
   - `X-Device-API-Key` header for ESP32 uploads
-- **Request**: `multipart/form-data`
+- **Request**: Accepts either `multipart/form-data` (file upload) or `application/json` (IMU data arrays)
+
+#### Option 1: JSON Body with IMU Data (Recommended for ESP32)
+
+- **Content-Type**: `application/json`
+- **Request Body**:
+  - `subtest_id` or `subtest` (required): Subtest name (`0` to `10`)
+  - `hand` (required): Hand (`left`, `right`, `l`, or `r`)
+  - `imu_data` (required): Object containing IMU arrays
+    - `ax` (required): List of accelerometer X values
+    - `ay` (required): List of accelerometer Y values
+    - `az` (required): List of accelerometer Z values
+    - `gx` (required): List of gyroscope X values
+    - `gy` (required): List of gyroscope Y values
+    - `gz` (required): List of gyroscope Z values
+
+- **Example Request**:
+
+  ```json
+  {
+    "subtest_id": "0",
+    "hand": "left",
+    "imu_data": {
+      "ax": [0.1, 0.2, 0.3],
+      "ay": [0.1, 0.2, 0.3],
+      "az": [9.8, 9.9, 10.0],
+      "gx": [0.01, 0.02, 0.03],
+      "gy": [0.01, 0.02, 0.03],
+      "gz": [0.01, 0.02, 0.03]
+    }
+  }
+  ```
+
+- **Output File Format**: The server converts the IMU arrays to a TXT file with the following CSV-style format:
+
+  ```
+  const,ax,ay,az,gx,gy,gz
+  0,0.1,0.1,9.8,0.01,0.01,0.01
+  1,0.2,0.2,9.9,0.02,0.02,0.02
+  2,0.3,0.3,10.0,0.03,0.03,0.03
+  ```
+
+#### Option 2: Multipart Form Data (File Upload)
+
+- **Content-Type**: `multipart/form-data`
   - `file` (required): TXT file with gyro data
   - `subtest` (required): Subtest name (`0` to `10`)
   - `hand` (required): Hand (`l` for left, `r` for right)
-- **Response**:
-  - Success (200): File uploaded, TestInput created
-  - Error (400): Missing file, invalid subtest, or invalid hand
-  - Error (401): Unauthorized
-  - Error (403): Forbidden (test belongs to another user)
+
 - **Example Response**:
 
   ```json
@@ -281,6 +321,12 @@
     }
   }
   ```
+
+- **Error Responses**:
+  - Success (200): File uploaded, TestInput created
+  - Error (400): Missing file, invalid subtest, invalid hand, or array length mismatch
+  - Error (401): Unauthorized
+  - Error (403]: Forbidden (test belongs to another user)
 
 ### `POST /api/tests/<test_id>/drawings`
 
