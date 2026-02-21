@@ -23,7 +23,13 @@ class Config:
         "text": ["txt", "csv", "json"],
     }
 
+    # IP Whitelisting for Cloudflare Tunnel
+    ALLOWED_IPS = (
+        [ip.strip() for ip in os.environ.get("ALLOWED_IPS", "").split(",")]
+        if os.environ.get("ALLOWED_IPS")
+        else []
+    )
+
     @staticmethod
     def init_app(app):
-        # Create upload folder if it doesn't exist
         os.makedirs(Config.UPLOAD_FOLDER, exist_ok=True)

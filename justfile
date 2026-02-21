@@ -5,6 +5,10 @@ default:
 run:
     python app.py
 
+# Run cloudflaredtunnel
+tunnel:
+  ./start_tunnel.sh
+
 # Run with auto-reload using flask run
 dev:
     flask --app app run --debug --host 0.0.0.0 --port 5000

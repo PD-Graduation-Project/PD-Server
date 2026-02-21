@@ -1,4 +1,4 @@
-from flask import Flask, jsonify
+from flask import Flask, abort, jsonify, request
 from flask_cors import CORS
 from flask_migrate import Migrate
 
@@ -18,6 +18,11 @@ def create_app(config_override=None):
     Migrate(app, db)
 
     CORS(app)
+
+    @app.before_request
+    def check_ip():
+        if Config.ALLOWED_IPS and request.remote_addr not in Config.ALLOWED_IPS:
+            abort(403)
 
     from routes.auth_routes import auth_bp
     from routes.esp32_devices_routes import esp32_devices_bp
