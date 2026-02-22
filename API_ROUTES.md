@@ -504,21 +504,21 @@ These routes are used by the ESP32 device itself, not by the mobile app.
 
 ### `POST /api/esp32/register`
 
-- **Description**: Register ESP32 device and receive production API key
-- **Authentication**: Factory API key in header
-- **Headers**: `X-Device-API-Key: <factory_api_key>`
+- **Description**: Register ESP32 device and receive production API key. Verifies factory key using HMAC.
+- **Authentication**: Factory API key in header (HMAC-derived)
+- **Headers**: `X-Device-API-Key: <factory_api_key>` (format: `fk_<32-hex-chars>`)
 - **Request Body**: JSON object
-  - `device_id` (required): Device ID (e.g., `ESP32-001234`)
+  - `device_id` (required): Device ID in format `ESP32-XXXXXX` (6 hex chars from MAC address)
 - **Response**:
   - Success (200): Device registered, returns production API key
-  - Error (401): Invalid factory API key
-  - Error (400): Missing device_id or device ID mismatch
-- **Note**: Called automatically by ESP32 on first boot. Factory API key is pre-programmed in firmware.
+  - Error (401): Invalid factory key format or HMAC mismatch
+  - Error (400): Missing device_id or invalid device_id format
+- **Note**: Factory key is generated during manufacturing using HMAC-SHA256 from device_id and a shared secret. Device is created in DB on first registration.
 - **Example Request**:
 
   ```json
   {
-    "device_id": "ESP32-001234"
+    "device_id": "ESP32-AABBCC"
   }
   ```
 
@@ -528,7 +528,7 @@ These routes are used by the ESP32 device itself, not by the mobile app.
   {
     "success": true,
     "data": {
-      "device_id": "ESP32-001234",
+      "device_id": "ESP32-AABBCC",
       "api_key": "sk_live_abc123def456..."
     }
   }
@@ -697,9 +697,39 @@ Available tremor test steps (controlled via `config`):
 
 ## ESP32 Device ID Format
 
-- Device IDs follow format: `ESP32-XXXXXX` (e.g., `ESP32-001234`)
+- Device IDs follow format: `ESP32-XXXXXX` (6 hex characters)
+- Derived from ESP32 MAC address (last 6 chars)
+- Example: MAC `AA:BB:CC:DD:EE:FF` → Device ID `ESP32-DDEEFF`
 - Printed on sticker on ESP32 device
 - User types this ID in mobile app to pair device
+
+## ESP32 Factory Key Generation
+
+Factory keys are generated using HMAC-SHA256 during manufacturing:
+
+```
+factory_key = "fk_" + HMAC-SHA256(device_id, FACTORY_SECRET)[:32]
+```
+
+### Manufacturing Script Usage
+
+```bash
+# Set the factory secret (same as server)
+export FACTORY_SECRET="your_secret_here"
+
+# Generate factory key from MAC address
+python scripts/generate_factory_key.py AA:BB:CC:DD:EE:FF
+
+# Output:
+# device_id: ESP32-DDEEFF
+# factory_key: fk_a1b2c3d4e5f6...
+```
+
+### Environment Variables
+
+| Variable | Description | Required |
+|----------|-------------|----------|
+| `FACTORY_SECRET` | Shared secret for HMAC factory key generation | Yes (production) |
 
 ## ESP32 vs Mobile
 
@@ -719,9 +749,9 @@ Available tremor test steps (controlled via `config`):
 | `/api/tests/<id>/drawings` | JWT | `Authorization: Bearer <token>` |
 | `/api/tests/<id>/voice` | JWT | `Authorization: Bearer <token>` |
 | `/api/esp32-devices/*` | JWT | `Authorization: Bearer <token>` |
-| `/api/esp32/register` | Factory Key | `X-Device-API-Key: <factory_key>` |
-| `/api/esp32/stream` | Production Key | `X-Device-API-Key: <api_key>` |
-| `/api/esp32/heartbeat` | Production Key | `X-Device-API-Key: <api_key>` |
+| `/api/esp32/register` | Factory Key (HMAC) | `X-Device-API-Key: fk_...` |
+| `/api/esp32/stream` | Production Key | `X-Device-API-Key: sk_live_...` |
+| `/api/esp32/heartbeat` | Production Key | `X-Device-API-Key: sk_live_...` |
 | `/api/user/*` | JWT | `Authorization: Bearer <token>` |
 | `/api/questionnaire/*` | JWT | `Authorization: Bearer <token>` |
 | `/health` | None | - |

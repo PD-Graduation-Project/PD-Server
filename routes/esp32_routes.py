@@ -2,12 +2,13 @@ import queue
 import secrets
 from datetime import datetime
 
-from flask import Blueprint, Response, g, jsonify, stream_with_context
+from flask import Blueprint, Response, g, jsonify, request, stream_with_context
 
 from middleware.authenticate_esp32 import authenticate_esp32, authenticate_esp32_factory
 from models.database import db
 from models.test_models import ESP32Device
 from utils.esp32_connection_manager import connection_manager
+from utils.factory_key import validate_device_id_format, verify_factory_key
 
 esp32_bp = Blueprint("esp32", __name__, url_prefix="/api/esp32")
 
@@ -22,38 +23,50 @@ DEVICE_TIMEOUT_SECONDS = 60
 def register_device():
     """
     ESP32 registration endpoint.
-    ESP32 calls this on first boot with factory API key and sends device_id in body.
-    Returns a production API key for future authentication.
+    Verifies factory_key via HMAC, creates device if not exists.
+    Returns production API key for future authentication.
     """
-    from flask import request
-
     data = request.get_json() or {}
     device_id = data.get("device_id")
 
     if not device_id:
-        return jsonify({"error": "device_id is required in body"}), 400
+        return jsonify({"error": "device_id is required"}), 400
 
-    device = g.esp32_device
+    device_id = device_id.upper()
 
-    if device.device_id and device.device_id != device_id:
-        return jsonify({"error": "Device ID mismatch"}), 400
-
-    device.device_id = device_id
-
-    if device.api_key:
-        db.session.commit()
+    if not validate_device_id_format(device_id):
         return (
-            jsonify(
-                {
-                    "success": True,
-                    "data": {
-                        "device_id": device.device_id,
-                        "api_key": device.api_key,
-                    },
-                }
-            ),
-            200,
+            jsonify({"error": "Invalid device_id format. Expected: ESP32-XXXXXX"}),
+            400,
         )
+
+    if not verify_factory_key(device_id, g.factory_key):
+        return jsonify({"error": "Invalid factory key"}), 401
+
+    # Look up existing device
+    device = ESP32Device.query.filter_by(device_id=device_id).first()
+
+    if device:
+        if device.api_key:
+            return (
+                jsonify(
+                    {
+                        "success": True,
+                        "data": {
+                            "device_id": device.device_id,
+                            "api_key": device.api_key,
+                        },
+                    }
+                ),
+                200,
+            )
+    else:
+        # Create new device
+        device = ESP32Device(
+            device_id=device_id,
+            factory_api_key=g.factory_key,
+        )
+        db.session.add(device)
 
     # Generate production API key
     production_key = f"sk_live_{secrets.token_urlsafe(32)}"
@@ -66,7 +79,7 @@ def register_device():
                 "success": True,
                 "data": {
                     "device_id": device.device_id,
-                    "api_key": production_key,  # Should be saved inside the flash of the esp32
+                    "api_key": production_key,
                 },
             }
         ),

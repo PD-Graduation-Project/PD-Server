@@ -3,8 +3,8 @@ from models.test_models import ESP32Device
 
 
 class TestESP32Register:
-    def test_register_success(self, client, esp32_device_unregistered):
-        """ESP32 registers with factory key and gets production key."""
+    def test_register_success(self, app, client, esp32_device_unregistered):
+        """ESP32 registers with HMAC factory key and gets production key."""
         headers = {"X-Device-API-Key": esp32_device_unregistered.factory_api_key}
         response = client.post(
             "/api/esp32/register",
@@ -16,6 +16,13 @@ class TestESP32Register:
         assert result["success"] is True
         assert result["data"]["device_id"] == "ESP32-009999"
         assert result["data"]["api_key"].startswith("sk_live_")
+
+        # Verify device was created in DB
+        with app.app_context():
+            device = ESP32Device.query.filter_by(device_id="ESP32-009999").first()
+            assert device is not None
+            assert device.api_key.startswith("sk_live_")
+            assert device.factory_api_key == esp32_device_unregistered.factory_api_key
 
     def test_register_already_registered(self, client, esp32_device):
         """ESP32 already has production key, returns existing key."""
@@ -29,8 +36,8 @@ class TestESP32Register:
         result = response.get_json()
         assert result["data"]["api_key"] == esp32_device.api_key
 
-    def test_register_invalid_factory_key(self, client):
-        """Invalid factory key returns 401."""
+    def test_register_invalid_factory_key_format(self, client):
+        """Invalid factory key format (not starting with fk_) returns 401."""
         headers = {"X-Device-API-Key": "invalid_factory_key"}
         response = client.post(
             "/api/esp32/register",
@@ -38,6 +45,18 @@ class TestESP32Register:
             headers=headers,
         )
         assert response.status_code == 401
+        assert "Invalid factory key format" in response.get_json()["error"]
+
+    def test_register_invalid_hmac(self, client):
+        """Factory key with correct format but wrong HMAC returns 401."""
+        headers = {"X-Device-API-Key": "fk_00000000000000000000000000000000"}
+        response = client.post(
+            "/api/esp32/register",
+            json={"device_id": "ESP32-AABBCC"},
+            headers=headers,
+        )
+        assert response.status_code == 401
+        assert "Invalid factory key" in response.get_json()["error"]
 
     def test_register_missing_api_key_header(self, client):
         """Missing X-Device-API-Key header returns 401."""
@@ -46,6 +65,70 @@ class TestESP32Register:
             json={"device_id": "ESP32-000000"},
         )
         assert response.status_code == 401
+
+    def test_register_missing_device_id(self, client, esp32_device_unregistered):
+        """Missing device_id in body returns 400."""
+        headers = {"X-Device-API-Key": esp32_device_unregistered.factory_api_key}
+        response = client.post(
+            "/api/esp32/register",
+            json={},
+            headers=headers,
+        )
+        assert response.status_code == 400
+        assert "device_id is required" in response.get_json()["error"]
+
+    def test_register_invalid_device_id_format(self, client):
+        """Invalid device_id format returns 400."""
+
+        # Generate a valid factory key for an invalid device_id
+        # This tests the format validation
+        headers = {"X-Device-API-Key": "fk_00000000000000000000000000000000"}
+        response = client.post(
+            "/api/esp32/register",
+            json={"device_id": "INVALID-FORMAT"},
+            headers=headers,
+        )
+        assert response.status_code == 400
+        assert "Invalid device_id format" in response.get_json()["error"]
+
+    def test_register_creates_device_on_first_registration(self, app, client):
+        """First registration creates device in DB."""
+        from utils.factory_key import generate_factory_key
+
+        device_id = "ESP32-AABBCC"
+        factory_key = generate_factory_key(device_id)
+
+        headers = {"X-Device-API-Key": factory_key}
+        response = client.post(
+            "/api/esp32/register",
+            json={"device_id": device_id},
+            headers=headers,
+        )
+        assert response.status_code == 200
+
+        # Verify device created in DB
+        with app.app_context():
+            device = ESP32Device.query.filter_by(device_id=device_id).first()
+            assert device is not None
+            assert device.factory_api_key == factory_key
+            assert device.api_key.startswith("sk_live_")
+            assert device.user_id is None  # Not paired yet
+
+    def test_register_lowercase_device_id_normalized(self, app, client):
+        """Device ID is normalized to uppercase."""
+        from utils.factory_key import generate_factory_key
+
+        device_id = "ESP32-DDEEFF"
+        factory_key = generate_factory_key(device_id)
+
+        headers = {"X-Device-API-Key": factory_key}
+        response = client.post(
+            "/api/esp32/register",
+            json={"device_id": "esp32-ddeeff"},  # lowercase
+            headers=headers,
+        )
+        assert response.status_code == 200
+        assert response.get_json()["data"]["device_id"] == "ESP32-DDEEFF"
 
 
 class TestESP32Heartbeat:

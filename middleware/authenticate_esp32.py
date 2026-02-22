@@ -7,24 +7,22 @@ from models.test_models import ESP32Device
 
 def authenticate_esp32_factory(fn):
     """
-    Middleware to authenticate ESP32 requests using factory API key.
-    Used only for the /esp32/register endpoint.
-    Sets g.esp32_device if authentication is successful.
+    Middleware for /esp32/register endpoint.
+    Extracts factory key from header and stores in g.factory_key.
+    HMAC verification happens in the route (needs device_id from body).
     """
 
     @wraps(fn)
     def wrapper(*args, **kwargs):
-        api_key = request.headers.get("X-Device-API-Key")
+        factory_key = request.headers.get("X-Device-API-Key")
 
-        if not api_key:
+        if not factory_key:
             return jsonify({"error": "X-Device-API-Key header required"}), 401
 
-        device = ESP32Device.query.filter_by(factory_api_key=api_key).first()
+        if not factory_key.startswith("fk_"):
+            return jsonify({"error": "Invalid factory key format"}), 401
 
-        if not device:
-            return jsonify({"error": "Invalid factory API key"}), 401
-
-        g.esp32_device = device
+        g.factory_key = factory_key
 
         return fn(*args, **kwargs)
 

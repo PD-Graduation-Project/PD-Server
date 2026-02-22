@@ -29,6 +29,7 @@ def e2e_app():
             "SQLALCHEMY_TRACK_MODIFICATIONS": False,
             "JWT_SECRET_KEY": "test-e2e-secret-key",
             "JWT_ALGORITHM": "HS256",
+            "FACTORY_SECRET": "test_factory_secret",
         }
     )
 
@@ -106,33 +107,44 @@ def e2e_auth_headers(e2e_user_with_tokens):
 
 
 @pytest.fixture
-def e2e_esp32_unregistered(e2e_db_session):
+def e2e_esp32_unregistered(e2e_app):
     """
-    Create an ESP32 device that hasn't registered yet.
-    Has factory_api_key but no production api_key.
+    Create device_id and factory_key for an unregistered ESP32.
+    Uses HMAC-generated factory key. No DB entry created.
     """
-    device = ESP32Device(
-        device_id=f"ESP32-E2E-{uuid.uuid4().hex[:6].upper()}",
-        factory_api_key=f"factory_e2e_{secrets.token_hex(16)}",
-        user_id=None,
-        api_key=None,
-        is_connected=False,
-    )
-    e2e_db_session.add(device)
-    e2e_db_session.commit()
-    return device
+    from dataclasses import dataclass
+    from typing import Optional
+
+    from utils.factory_key import generate_factory_key
+
+    # Generate a unique device ID
+    device_id = f"ESP32-{uuid.uuid4().hex[:6].upper()}"
+    factory_key = generate_factory_key(device_id)
+
+    @dataclass
+    class UnregisteredDevice:
+        device_id: str
+        factory_api_key: str
+        api_key: Optional[str] = None
+
+    return UnregisteredDevice(device_id=device_id, factory_api_key=factory_key)
 
 
 @pytest.fixture
-def e2e_esp32_paired(e2e_db_session, e2e_user):
+def e2e_esp32_paired(e2e_db_session, e2e_user, e2e_app):
     """
     Create an ESP32 device that's already paired to a user.
-    Has production api_key.
+    Uses HMAC-generated factory key.
     """
+    from utils.factory_key import generate_factory_key
+
+    device_id = f"ESP32-{uuid.uuid4().hex[:6].upper()}"
+    factory_key = generate_factory_key(device_id)
+
     device = ESP32Device(
-        device_id=f"ESP32-E2E-{uuid.uuid4().hex[:6].upper()}",
+        device_id=device_id,
         user_id=e2e_user.id,
-        factory_api_key=f"factory_e2e_{secrets.token_hex(16)}",
+        factory_api_key=factory_key,
         api_key=f"sk_live_e2e_{secrets.token_hex(24)}",
         name="E2E Test Sensor",
         is_connected=False,

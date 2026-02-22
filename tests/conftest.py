@@ -21,6 +21,7 @@ def app():
             "SQLALCHEMY_TRACK_MODIFICATIONS": False,
             "JWT_SECRET_KEY": "test-secret-key-do-not-use-in-production",
             "JWT_ALGORITHM": "HS256",
+            "FACTORY_SECRET": "test_factory_secret",
         }
     )
 
@@ -253,11 +254,17 @@ def multiple_sessions(app, test_user, db_session):
 def esp32_device(db_session, test_user):
     """
     Create a registered and paired ESP32 device with production API key.
+    Uses HMAC-generated factory key.
     """
+    from utils.factory_key import generate_factory_key
+
+    device_id = "ESP32-001234"
+    factory_key = generate_factory_key(device_id)
+
     device = ESP32Device(
-        device_id="ESP32-001234",
+        device_id=device_id,
         user_id=test_user.id,
-        factory_api_key="factory_test_key_abc123",
+        factory_api_key=factory_key,
         api_key="sk_live_test_production_key_xyz789",
         name="Test Sensor",
         is_connected=False,
@@ -271,10 +278,16 @@ def esp32_device(db_session, test_user):
 def esp32_device_unpaired(db_session):
     """
     Create a registered but unpaired ESP32 device (no user_id).
+    Uses HMAC-generated factory key.
     """
+    from utils.factory_key import generate_factory_key
+
+    device_id = "ESP32-005678"
+    factory_key = generate_factory_key(device_id)
+
     device = ESP32Device(
-        device_id="ESP32-005678",
-        factory_api_key="factory_unpaired_key_def456",
+        device_id=device_id,
+        factory_api_key=factory_key,
         api_key="sk_live_unpaired_key_abc123",
         is_connected=False,
     )
@@ -284,18 +297,24 @@ def esp32_device_unpaired(db_session):
 
 
 @pytest.fixture
-def esp32_device_unregistered(db_session):
+def esp32_device_unregistered():
     """
-    Create an ESP32 device that hasn't registered yet (no production key).
+    Return device_id and factory_key for an unregistered device.
+    No DB entry - will be created during registration.
     """
-    device = ESP32Device(
-        device_id="ESP32-009999",
-        factory_api_key="factory_unregistered_key_ghi789",
-        is_connected=False,
-    )
-    db_session.add(device)
-    db_session.commit()
-    return device
+    from dataclasses import dataclass
+
+    from utils.factory_key import generate_factory_key
+
+    device_id = "ESP32-009999"
+    factory_key = generate_factory_key(device_id)
+
+    @dataclass
+    class UnregisteredDevice:
+        device_id: str
+        factory_api_key: str
+
+    return UnregisteredDevice(device_id=device_id, factory_api_key=factory_key)
 
 
 @pytest.fixture

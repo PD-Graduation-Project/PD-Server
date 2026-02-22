@@ -192,22 +192,11 @@ class TestESP32Lifecycle:
         3. Device receives test
         4. Device is unpaired
         """
-        # ===== STEP 1: Create Unregistered Device =====
-        with e2e_app.app_context():
-            from models.database import db
-            from models.test_models import ESP32Device
+        # ===== STEP 1: Generate Device ID and Factory Key =====
+        from utils.factory_key import generate_factory_key
 
-            unregistered_device = ESP32Device(
-                device_id=f"ESP32-LIFECYCLE-{secrets.token_hex(4).upper()}",
-                factory_api_key=f"factory_lifecycle_{secrets.token_hex(8)}",
-                user_id=None,
-                api_key=None,
-                is_connected=False,
-            )
-            db.session.add(unregistered_device)
-            db.session.commit()
-            device_id = unregistered_device.device_id
-            factory_key = unregistered_device.factory_api_key
+        device_id = f"ESP32-{secrets.token_hex(3).upper()}"
+        factory_key = generate_factory_key(device_id)
 
         # ===== STEP 2: Device Registration =====
         register_response = e2e_client.post(
@@ -218,7 +207,9 @@ class TestESP32Lifecycle:
                 "Content-Type": "application/json",
             },
         )
-        assert register_response.status_code == 200
+        assert (
+            register_response.status_code == 200
+        ), f"Registration failed: {register_response.get_json()}"
         production_key = register_response.get_json()["data"]["api_key"]
 
         # ===== STEP 3: User Login =====
@@ -251,7 +242,6 @@ class TestESP32Lifecycle:
 
         # ===== STEP 6: Verify Device Status =====
         with e2e_app.app_context():
-            from models.database import db
             from models.test_models import ESP32Device
 
             device = ESP32Device.query.filter_by(device_id=device_id).first()
@@ -267,7 +257,6 @@ class TestESP32Lifecycle:
 
         # ===== STEP 8: Verify Device Unpaired =====
         with e2e_app.app_context():
-            from models.database import db
             from models.test_models import ESP32Device
 
             device = ESP32Device.query.filter_by(device_id=device_id).first()

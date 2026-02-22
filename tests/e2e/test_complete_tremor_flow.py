@@ -14,7 +14,6 @@ Tests the complete tremor test workflow:
 import io
 import secrets
 
-from models.database import db
 from tests.e2e.conftest import E2ETestDataGenerator
 
 
@@ -57,7 +56,21 @@ class TestCompleteTremorFlow:
             "Content-Type": "application/json",
         }
 
-        # 2. Pair Device
+        # 2. ESP32 Registration (must happen before pairing)
+        register_response = e2e_client.post(
+            "/api/esp32/register",
+            json={"device_id": e2e_esp32_unregistered.device_id},
+            headers={
+                "X-Device-API-Key": e2e_esp32_unregistered.factory_api_key,
+                "Content-Type": "application/json",
+            },
+        )
+        assert (
+            register_response.status_code == 200
+        ), f"Registration failed: {register_response.get_json()}"
+        production_key = register_response.get_json()["data"]["api_key"]
+
+        # 3. Pair Device
         pair_response = e2e_client.post(
             "/api/esp32-devices/pair",
             json={
@@ -73,7 +86,7 @@ class TestCompleteTremorFlow:
         pair_data = pair_response.get_json()
         assert pair_data["data"]["is_connected"] is False
 
-        # 3. Create Tremor Test
+        # 4. Create Tremor Test
         create_response = e2e_client.post(
             "/api/tests",
             json={
@@ -92,15 +105,8 @@ class TestCompleteTremorFlow:
         test_id = test_data["id"]
         assert test_data["status"] == "pending"
 
-        # 4. ESP32 Registration(commit directly to db)
-        with e2e_app.app_context():
-            esp32 = e2e_esp32_unregistered
-            esp32.api_key = f"sk_live_e2e_{secrets.token_hex(16)}"
-            esp32.user_id = e2e_user.id
-            db.session.commit()
-
         esp32_headers = {
-            "X-Device-API-Key": esp32.api_key,
+            "X-Device-API-Key": production_key,
             "Content-Type": "application/json",
         }
 
