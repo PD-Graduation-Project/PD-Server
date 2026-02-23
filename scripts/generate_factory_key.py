@@ -22,6 +22,9 @@ import hmac
 import os
 import re
 import sys
+from pathlib import Path
+
+from dotenv import load_dotenv
 
 
 def generate_device_id(mac_address: str) -> str:
@@ -65,6 +68,9 @@ def main():
         print("Example: python generate_factory_key.py AA:BB:CC:DD:EE:FF")
         sys.exit(1)
 
+        # Load .env from parent directory
+    env_path = Path(__file__).resolve().parent.parent / ".env"
+    load_dotenv(env_path)
     secret = os.environ.get("FACTORY_SECRET")
     if not secret:
         print("Error: FACTORY_SECRET environment variable not set")
