@@ -1,9 +1,20 @@
+import logging
+
 from flask import Flask, abort, jsonify, request
 from flask_cors import CORS
 from flask_migrate import Migrate
 
 from config import Config
 from models.database import db
+
+logging.basicConfig(
+    level=logging.DEBUG,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+)
+
+logging.getLogger("utils.esp32_connection_manager").setLevel(logging.DEBUG)
+logging.getLogger("routes.test_routes").setLevel(logging.DEBUG)
+logging.getLogger("routes.esp32_routes").setLevel(logging.DEBUG)
 
 
 def create_app(config_override=None):
@@ -57,4 +68,4 @@ def create_app(config_override=None):
 
 if __name__ == "__main__":
     app = create_app()
-    app.run(debug=True, host="0.0.0.0", port=5000)
+    app.run(debug=True, host="0.0.0.0", port=6969)

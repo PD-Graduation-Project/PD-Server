@@ -33,6 +33,9 @@ class Config:
     # ESP32 Factory Key HMAC Secret
     FACTORY_SECRET = os.environ.get("FACTORY_SECRET") or "dev_factory_secret_change_me"
 
+    # Redis settings for ESP32 event pub/sub
+    REDIS_URL = os.environ.get("REDIS_URL") or "redis://localhost:6379/0"
+
     @staticmethod
     def init_app(app):
         os.makedirs(Config.UPLOAD_FOLDER, exist_ok=True)

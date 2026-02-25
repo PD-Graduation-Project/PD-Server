@@ -1,8 +1,13 @@
 #!/bin/bash
-# Start Flask + Cloudflare Tunnel
+# Start Flask + ngrok Tunnel
 
+# Start Flask in background
 python app.py &
 FLASK_PID=$!
 sleep 3
-cloudflared tunnel --url http://localhost:5000
+
+# Start ngrok tunnel
+ngrok http 6969
+
+# Cleanup when ngrok exits
 kill $FLASK_PID 2>/dev/null

@@ -1,3 +1,4 @@
+import logging
 from typing import Any, cast
 
 from flask import Blueprint, g, jsonify, request
@@ -12,6 +13,7 @@ from utils.esp32_connection_manager import connection_manager
 from utils.validation import get_json_body, get_query_params
 
 test_bp = Blueprint("test", __name__, url_prefix="/api/tests")
+logger = logging.getLogger(__name__)
 
 
 @test_bp.route("", methods=["POST"])
@@ -54,7 +56,10 @@ def create_test():
 
     # If tremor test with ESP32, send SSE event to paired device
     if test_type == "tremor" and device_source == "esp32":
-        connection_manager.send_event(
+        logger.info(
+            f"[TEST ROUTE] Sending test_started event for test {test_session.id} to user {current_user.id}"
+        )
+        success = connection_manager.send_event(
             current_user.id,
             "test_started",
             {
@@ -63,6 +68,14 @@ def create_test():
                 "config": config,
             },
         )
+        if success:
+            logger.info(
+                f"[TEST ROUTE] test_started event sent successfully to user {current_user.id}"
+            )
+        else:
+            logger.warning(
+                f"[TEST ROUTE] Failed to send test_started event to user {current_user.id}"
+            )
 
     return (
         jsonify(

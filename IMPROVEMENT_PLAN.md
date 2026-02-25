@@ -82,13 +82,13 @@ Postgres (primary)
 - Scaling: single primary + read replicas for read-heavy workloads; use PgBouncer to pool connections from many app replicas.
 - HA: managed DB (RDS/Cloud SQL) or Patroni; daily backups and WAL/PITR recommended.
 
-Redis (cache, broker, ephemeral state)
+Redis (cache, broker, ephemeral state) ✅ DONE
 
 - Role: in-memory caching for responses, rate-limiter counters, broker/result backend for Celery/RQ, and ephemeral coordination (pub/sub for ESP32 events).
 - Use cases in this project:
   - Response cache: `list_tests`, `get_test`, `get_user`.
   - ML input caching: `ml:predict:{model}:{input_hash}` to avoid re-running inference.
-  - Pub/sub or shared state for `utils/esp32_connection_manager.py` so many API replicas can notify the correct device.
+  - [DONE] Pub/sub for `utils/esp32_connection_manager.py` - ESP32 events now work across multiple API replicas.
   - Rate limiting for sensitive endpoints.
 - Scaling: single instance for development; managed or clustered Redis for production.
 

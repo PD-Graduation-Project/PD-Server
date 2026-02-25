@@ -1,3 +1,4 @@
+import logging
 import queue
 import secrets
 from datetime import datetime
@@ -11,6 +12,7 @@ from utils.esp32_connection_manager import connection_manager
 from utils.factory_key import validate_device_id_format, verify_factory_key
 
 esp32_bp = Blueprint("esp32", __name__, url_prefix="/api/esp32")
+logger = logging.getLogger(__name__)
 
 # Heartbeat interval for SSE keep-alive (seconds)
 SSE_HEARTBEAT_INTERVAL = 30
@@ -48,6 +50,7 @@ def register_device():
 
     if device:
         if device.api_key:
+            logger.info(f"ESP32 device re-registered: {device_id}")
             return (
                 jsonify(
                     {
@@ -62,6 +65,7 @@ def register_device():
             )
     else:
         # Create new device
+        logger.info(f"New ESP32 device registered: {device_id}")
         device = ESP32Device(
             device_id=device_id,
             factory_api_key=g.factory_key,
@@ -98,6 +102,10 @@ def stream():
     device = g.esp32_device
     user_id = device.user_id
 
+    logger.info(
+        f"ESP32 stream connected: device_id={device.device_id}, user_id={user_id}"
+    )
+
     # Create a message queue for this connection
     msg_queue = queue.Queue(maxsize=100)
 
@@ -113,15 +121,28 @@ def stream():
     device_id = device.id
 
     def event_stream():
+        logger.info(
+            f"[SSE STREAM] Starting event stream for device {device.device_id}, user {user_id}"
+        )
         try:
             # Send initial connected event
+            logger.debug(
+                f"[SSE STREAM] Sending 'connected' event to device {device.device_id}"
+            )
             yield format_sse(event="connected", data={"device_id": device.device_id})
 
             while True:
                 try:
                     # Wait for messages with timeout for keep-alive
                     msg = msg_queue.get(timeout=SSE_HEARTBEAT_INTERVAL)
+                    logger.info(
+                        f"[SSE STREAM] Forwarding event '{msg['event']}' to device {device.device_id}"
+                    )
+                    logger.debug(f"[SSE STREAM] Event data: {msg['data']}")
                     yield format_sse(event=msg["event"], data=msg["data"])
+                    logger.debug(
+                        f"[SSE STREAM] Event '{msg['event']}' sent successfully"
+                    )
                 except queue.Empty:
                     # Send heartbeat to keep connection alive
                     yield format_sse(
@@ -129,9 +150,10 @@ def stream():
                         data={"timestamp": datetime.utcnow().isoformat()},
                     )
         except GeneratorExit:
-            pass
+            logger.info(f"[SSE STREAM] GeneratorExit for device {device.device_id}")
         finally:
             # Cleanup on disconnect
+            logger.info(f"ESP32 stream disconnected: device_id={device.device_id}")
             connection_manager.remove(user_id)
             try:
                 dev = db.session.get(ESP32Device, device_id)
@@ -145,9 +167,12 @@ def stream():
         stream_with_context(event_stream()),
         mimetype="text/event-stream",
         headers={
-            "Cache-Control": "no-cache",
+            "Cache-Control": "no-cache, no-transform",
             "X-Accel-Buffering": "no",
             "Connection": "keep-alive",
+            "Content-Type": "text/event-stream; charset=utf-8",
+            # Cloudflare-specific: disable buffering
+            "CF-Cache-Status": "DYNAMIC",
         },
     )
 
@@ -163,6 +188,8 @@ def heartbeat():
     device.is_connected = True
     device.last_seen_at = datetime.utcnow()
     db.session.commit()
+
+    logger.debug(f"ESP32 heartbeat received: device_id={device.device_id}")
 
     return (
         jsonify(

@@ -8,3 +8,4 @@ python-jose[cryptography]==3.3.0
 PyJWT==2.8.0
 Werkzeug==2.3.7
 marshmallow
+redis
