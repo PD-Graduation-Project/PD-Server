@@ -276,7 +276,7 @@ class E2ETestDataGenerator:
 
         config = {}
         for i in range(num_steps):
-            config[f"step_{i}"] = i in enabled_steps
+            config[str(i)] = i in enabled_steps
 
         return config
 

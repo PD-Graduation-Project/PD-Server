@@ -1,18 +1,21 @@
-from marshmallow import Schema, fields, validate
+from marshmallow import Schema, ValidationError, fields, validate, validates_schema
 
 
 class TremorTestConfigSchema(Schema):
-    step_0 = fields.Boolean(required=False, load_default=True)
-    step_1 = fields.Boolean(required=False, load_default=True)
-    step_2 = fields.Boolean(required=False, load_default=True)
-    step_3 = fields.Boolean(required=False, load_default=True)
-    step_4 = fields.Boolean(required=False, load_default=True)
-    step_5 = fields.Boolean(required=False, load_default=True)
-    step_6 = fields.Boolean(required=False, load_default=True)
-    step_7 = fields.Boolean(required=False, load_default=True)
-    step_8 = fields.Boolean(required=False, load_default=True)
-    step_9 = fields.Boolean(required=False, load_default=True)
-    step_10 = fields.Boolean(required=False, load_default=True)
+    @validates_schema
+    def validate_config(self, data, **kwargs):
+        valid_keys = {"0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10"}
+        for key, value in data.items():
+            if key not in valid_keys:
+                raise ValidationError(
+                    f"Invalid config key: {key}. Must be one of 0-10",
+                    field_name=key,
+                )
+            if not isinstance(value, bool):
+                raise ValidationError(
+                    f"Invalid config value for {key}: must be boolean, got {type(value).__name__}",
+                    field_name=key,
+                )
 
 
 class CreateTestSchema(Schema):
@@ -21,8 +24,19 @@ class CreateTestSchema(Schema):
     )
     device = fields.String(required=False, validate=validate.OneOf(["mobile", "esp32"]))
 
+    config = fields.Nested(
+        TremorTestConfigSchema,
+        required=False,
+        load_default=dict,
+    )
+    device = fields.String(required=False, validate=validate.OneOf(["mobile", "esp32"]))
+
     config = fields.Dict(
-        keys=fields.String(),
+        keys=fields.String(
+            validate=validate.OneOf(
+                ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10"]
+            )
+        ),
         values=fields.Boolean(),
         required=False,
         load_default=dict,

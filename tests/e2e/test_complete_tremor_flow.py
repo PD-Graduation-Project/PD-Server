@@ -92,10 +92,10 @@ class TestCompleteTremorFlow:
             json={
                 "test_type": "tremor",
                 "config": {
-                    "step_0": True,
-                    "step_1": True,
-                    "step_2": False,
-                    "step_3": True,
+                    "0": True,
+                    "1": True,
+                    "2": False,
+                    "3": True,
                 },
             },
             headers=auth_headers,
@@ -282,7 +282,7 @@ class TestCompleteTremorFlow:
         # Create test with only step 0
         create_response = e2e_client.post(
             "/api/tests",
-            json={"test_type": "tremor", "config": {"step_0": True}},
+            json={"test_type": "tremor", "config": {"0": True}},
             headers={
                 "Authorization": f"Bearer {tokens['access_token']}",
                 "Content-Type": "application/json",
@@ -376,7 +376,7 @@ class TestCompleteTremorFlow:
             "/api/tests",
             json={
                 "test_type": "tremor",
-                "config": {"step_0": True, "step_1": True, "step_2": True},
+                "config": {"0": True, "1": True, "2": True},
             },
             headers={
                 "Authorization": f"Bearer {tokens['access_token']}",

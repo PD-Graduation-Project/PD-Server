@@ -26,7 +26,7 @@ def tremor_session(app, test_user, clean_test_data):
             test_type="tremor",
             status="pending",
             device_source="esp32",
-            config={"step_0": True, "step_1": True, "step_2": False},
+            config={"0": True, "1": True, "2": False},
         )
         db.session.add(session)
         db.session.commit()

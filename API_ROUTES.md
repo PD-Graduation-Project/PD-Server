@@ -110,7 +110,7 @@
 - **Request Body**: JSON object
   - `test_type` (required): One of `tremor`, `drawing`, `voice`
   - `device` (optional): Override device source - one of `mobile`, `esp32`. If not provided, defaults to `esp32` for tremor tests and `mobile` for drawing/voice tests
-  - `config` (optional): Configuration object for tremor tests (step_0 through step_10)
+  - `config` (optional): Configuration object for tremor tests (0 through 10)
 - **Response**:
   - Success (201): Created test session
   - Error (400): Invalid request data
@@ -121,10 +121,10 @@
   {
     "test_type": "tremor",
     "config": {
-      "step_0": true,
-      "step_1": true,
-      "step_2": false,
-      "step_10": true
+      "0": true,
+      "1": true,
+      "2": false,
+      "10": true
     }
   }
   ```
@@ -136,8 +136,8 @@
     "test_type": "tremor",
     "device": "mobile",
     "config": {
-      "step_0": true,
-      "step_1": true
+      "0": true,
+      "1": true
     }
   }
   ```
@@ -162,8 +162,8 @@
       "status": "pending",
       "device_source": "esp32",
       "config": {
-        "step_0": true,
-        "step_1": true
+        "0": true,
+        "1": true
       },
       "created_at": "2026-02-09T10:00:00Z",
       "completed_at": null,
@@ -198,7 +198,7 @@
           "test_type": "tremor",
           "status": "completed",
           "device_source": "esp32",
-          "config": {"step_0": true},
+          "config": {"0": true},
           "created_at": "2026-02-09T10:00:00Z",
           "completed_at": "2026-02-09T10:00:30Z",
           "ml_score": 0.72,
@@ -233,7 +233,7 @@
       "test_type": "tremor",
       "status": "completed",
       "device_source": "esp32",
-      "config": {"step_0": true, "step_1": true},
+      "config": {"0": true, "1": true},
       "created_at": "2026-02-09T10:00:00Z",
       "completed_at": "2026-02-09T10:00:30Z",
       "ml_score": 0.72,
@@ -550,7 +550,7 @@ These routes are used by the ESP32 device itself, not by the mobile app.
   data: {"device_id": "ESP32-001234"}
 
   event: test_started
-  data: {"test_id": 5, "test_type": "tremor", "config": {"step_0": true, "step_1": true}}
+  data: {"test_id": 5, "test_type": "tremor", "config": {"0": true, "1": true}}
 
   event: heartbeat
   data: {"timestamp": "2026-02-09T10:00:00Z"}
@@ -683,17 +683,17 @@ Available tremor test steps (controlled via `config`):
 
 | Step | Name | Default |
 |------|------|---------|
-| step_0 | Resting | true |
-| step_1 | Resting with serial sevens | true |
-| step_2 | Lift and extend arms | true |
-| step_3 | Arms remain lifted | true |
-| step_4 | Hold one kilogram weight | true |
-| step_5 | Point index finger | true |
-| step_6 | Drink from glass | true |
-| step_7 | Cross and extend arms | true |
-| step_8 | Touch index fingers together | true |
-| step_9 | Tap nose with index finger | true |
-| step_10 | Entrainment foot stomping | true |
+| 0 | Resting | true |
+| 1 | Resting with serial sevens | true |
+| 2 | Lift and extend arms | true |
+| 3 | Arms remain lifted | true |
+| 4 | Hold one kilogram weight | true |
+| 5 | Point index finger | true |
+| 6 | Drink from glass | true |
+| 7 | Cross and extend arms | true |
+| 8 | Touch index fingers together | true |
+| 9 | Tap nose with index finger | true |
+| 10 | Entrainment foot stomping | true |
 
 ## ESP32 Device ID Format
 

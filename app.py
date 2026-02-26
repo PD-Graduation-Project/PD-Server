@@ -12,9 +12,9 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
 )
 
-logging.getLogger("utils.esp32_connection_manager").setLevel(logging.DEBUG)
-logging.getLogger("routes.test_routes").setLevel(logging.DEBUG)
-logging.getLogger("routes.esp32_routes").setLevel(logging.DEBUG)
+logging.getLogger("utils.esp32_connection_manager").setLevel(logging.INFO)
+logging.getLogger("routes.test_routes").setLevel(logging.INFO)
+logging.getLogger("routes.esp32_routes").setLevel(logging.INFO)
 
 
 def create_app(config_override=None):

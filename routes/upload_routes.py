@@ -98,7 +98,7 @@ def _upload_tremor_json(test_id, test_session):
         return jsonify({"error": f"Invalid subtest: {subtest}"}), 400
 
     config = test_session.config or {}
-    step_key = f"step_{subtest}"
+    step_key = str(subtest)
     if config and not config.get(step_key, True):
         return (
             jsonify({"error": f"Subtest {subtest} is not enabled for this test"}),
@@ -161,7 +161,7 @@ def _upload_tremor_file(test_id, test_session):
         return jsonify({"error": "Invalid hand: must be 'l' or 'r'"}), 400
 
     config = test_session.config or {}
-    step_key = f"step_{subtest}"
+    step_key = str(subtest)
     if config and not config.get(step_key, True):
         return (
             jsonify({"error": f"Subtest {subtest} is not enabled for this test"}),
@@ -403,7 +403,7 @@ def complete_test(test_id):
         uploaded_files = {inp.file_path.split("/")[-1] for inp in uploaded_inputs}
 
         for step in ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10"]:
-            step_key = f"step_{step}"
+            step_key = str(step)
             if config.get(step_key, False):
                 expected_count += 2
                 for hand in ["l", "r"]:

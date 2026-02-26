@@ -167,7 +167,7 @@ class TestMultiUserIsolation:
         # ===== User A Creates Test =====
         create_response = e2e_client.post(
             "/api/tests",
-            json={"test_type": "tremor", "config": {"step_0": True}},
+            json={"test_type": "tremor", "config": {"0": True}},
             headers=headers_a,
         )
         assert create_response.status_code == 201
