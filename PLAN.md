@@ -483,17 +483,17 @@ When creating a tremor test, the mobile app specifies which subtests to include:
 
 | Key | Name | Default |
 |-----|------|---------|
-| step_1a | Resting eyes closed | true |
-| step_1b | Resting with serial sevens | true |
-| step_2 | Lift and extend arms | true |
-| step_3 | Arms remain lifted | true |
-| step_4 | Hold one kilogram weight | true |
-| step_5 | Point index finger | true |
-| step_6 | Drink from glass | true |
-| step_7 | Cross and extend arms | true |
-| step_8 | Touch index fingers together | true |
-| step_9 | Tap nose with index finger | true |
-| step_10 | Entrainment foot stomping | true |
+  0| Resting eyes closed | true |
+| 1 | Resting with serial sevens | true |
+| 2 | Lift and extend arms | true |
+| 3 | Arms remain lifted | true |
+| 4 | Hold one kilogram weight | true |
+| 5 | Point index finger | true |
+| 6 | Drink from glass | true |
+| 7 | Cross and extend arms | true |
+| 8 | Touch index fingers together | true |
+| 9 | Tap nose with index finger | true |
+| 10 | Entrainment foot stomping | true |
 
 ### ESP32 vs Mobile
 
