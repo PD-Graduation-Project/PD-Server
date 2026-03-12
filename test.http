@@ -1,0 +1,35 @@
+###
+
+@baseUrl = {{tunnel}}
+@local = http://localhost:6969
+@tunnel = https://ripe-pillows-attend.loca.lt/
+
+
+### login
+
+# @name login
+
+POST {{baseUrl}}/api/auth/login HTTP/1.1
+Content-Type: application/json
+
+{
+  "email": "user@test.com",
+  "password": "123456"
+}
+
+
+### Send Test
+
+# @name create_test
+
+POST {{baseUrl}}/api/tests HTTP/1.1
+Content-Type: application/json
+Authorization: Bearer {{login.response.body.$.access_token}}
+
+{
+  "config": {
+    "0": true
+  },
+  "device": "esp32",
+  "test_type": "tremor"
+}

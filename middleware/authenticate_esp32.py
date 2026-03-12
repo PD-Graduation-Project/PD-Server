@@ -2,6 +2,7 @@ from functools import wraps
 
 from flask import g, jsonify, request
 
+from models.database import db
 from models.test_models import ESP32Device
 
 
@@ -33,7 +34,8 @@ def authenticate_esp32(fn):
     """
     Middleware to authenticate ESP32 requests using production API key.
     Used for /esp32/stream, /esp32/heartbeat, and upload routes.
-    Sets g.esp32_device and g.user_id if authentication is successful.
+    Sets g.esp32_device_info (dict) and g.user_id if authentication is successful.
+    Detaches from DB session after authentication to prevent connection pool exhaustion.
     """
 
     @wraps(fn)
@@ -51,8 +53,15 @@ def authenticate_esp32(fn):
         if not device.user_id:
             return jsonify({"error": "Device not paired to any user"}), 403
 
-        g.esp32_device = device
+        g.esp32_device_info = {
+            "id": device.id,
+            "device_id": device.device_id,
+            "user_id": device.user_id,
+        }
         g.user_id = device.user_id
+
+        # Release the DB connection back to the pool
+        db.session.expire_all()
 
         return fn(*args, **kwargs)
 
@@ -65,6 +74,7 @@ def authenticate_jwt_or_esp32(fn):
     Used for routes that both mobile app and ESP32 can access
     (e.g., /tests/{id}/tremor, /tests/{id}/complete).
     Sets g.user_id in both cases.
+    Detaches from DB session after ESP32 authentication to prevent connection pool exhaustion.
     """
 
     @wraps(fn)
@@ -82,8 +92,16 @@ def authenticate_jwt_or_esp32(fn):
             if not device.user_id:
                 return jsonify({"error": "Device not paired to any user"}), 403
 
-            g.esp32_device = device
+            # Store only the data we need (not the ORM object) to avoid holding DB connection
+            g.esp32_device_info = {
+                "id": device.id,
+                "device_id": device.device_id,
+                "user_id": device.user_id,
+            }
             g.user_id = device.user_id
+
+            # Expire all objects to release the DB connection back to the pool
+            db.session.expire_all()
 
             return fn(*args, **kwargs)
 

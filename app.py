@@ -24,6 +24,9 @@ def create_app(config_override=None):
     if config_override:
         app.config.update(config_override)
 
+    # Apply Config.init_app (sets pool options, creates upload folder, etc.)
+    Config.init_app(app)
+
     # Initialize extensions
     db.init_app(app)
     Migrate(app, db)

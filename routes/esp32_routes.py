@@ -98,45 +98,47 @@ def stream():
     SSE endpoint for ESP32 devices.
     ESP32 connects and listens for test_started events.
     Connection stays open until device disconnects.
+    Uses detached device info to avoid holding DB connection.
     """
-    device = g.esp32_device
-    user_id = device.user_id
+    device_info = g.esp32_device_info
+    user_id = device_info["user_id"]
+    device_id = device_info["id"]
+    device_id_str = device_info["device_id"]
 
-    logger.info(
-        f"ESP32 stream connected: device_id={device.device_id}, user_id={user_id}"
-    )
+    logger.info(f"ESP32 stream connected: device_id={device_id_str}, user_id={user_id}")
 
     # Create a message queue for this connection
     msg_queue = queue.Queue(maxsize=100)
 
     # Register connection
-    connection_manager.add(user_id, device.device_id, msg_queue)
+    connection_manager.add(user_id, device_id_str, msg_queue)
 
-    # Update device status
-    device.is_connected = True
-    device.last_seen_at = datetime.utcnow()
-    db.session.commit()
-
-    # Store device_id for cleanup (avoid referencing ORM object in generator)
-    device_id = device.id
+    # Update device status, then commit to release the connection back to pool
+    device = db.session.get(ESP32Device, device_id)
+    if device:
+        device.is_connected = True
+        device.last_seen_at = datetime.utcnow()
+        db.session.commit()
+    # Expire all to detach objects - connection is returned to pool after commit
+    db.session.expire_all()
 
     def event_stream():
         logger.info(
-            f"[SSE STREAM] Starting event stream for device {device.device_id}, user {user_id}"
+            f"[SSE STREAM] Starting event stream for device {device_id_str}, user {user_id}"
         )
         try:
             # Send initial connected event
             logger.debug(
-                f"[SSE STREAM] Sending 'connected' event to device {device.device_id}"
+                f"[SSE STREAM] Sending 'connected' event to device {device_id_str}"
             )
-            yield format_sse(event="connected", data={"device_id": device.device_id})
+            yield format_sse(event="connected", data={"device_id": device_id_str})
 
             while True:
                 try:
                     # Wait for messages with timeout for keep-alive
                     msg = msg_queue.get(timeout=SSE_HEARTBEAT_INTERVAL)
                     logger.info(
-                        f"[SSE STREAM] Forwarding event '{msg['event']}' to device {device.device_id}"
+                        f"[SSE STREAM] Forwarding event '{msg['event']}' to device {device_id_str}"
                     )
                     logger.debug(f"[SSE STREAM] Event data: {msg['data']}")
                     yield format_sse(event=msg["event"], data=msg["data"])
@@ -150,10 +152,10 @@ def stream():
                         data={"timestamp": datetime.utcnow().isoformat()},
                     )
         except GeneratorExit:
-            logger.info(f"[SSE STREAM] GeneratorExit for device {device.device_id}")
+            logger.info(f"[SSE STREAM] GeneratorExit for device {device_id_str}")
         finally:
-            # Cleanup on disconnect
-            logger.info(f"ESP32 stream disconnected: device_id={device.device_id}")
+            # Cleanup on disconnect - get a fresh session since request context is gone
+            logger.info(f"ESP32 stream disconnected: device_id={device_id_str}")
             connection_manager.remove(user_id)
             try:
                 dev = db.session.get(ESP32Device, device_id)
@@ -161,7 +163,9 @@ def stream():
                     dev.is_connected = False
                     db.session.commit()
             except Exception:
-                pass
+                db.session.rollback()
+            finally:
+                db.session.expire_all()
 
     return Response(
         stream_with_context(event_stream()),
@@ -183,13 +187,18 @@ def heartbeat():
     """
     ESP32 heartbeat endpoint.
     Updates is_connected and last_seen_at.
+    Uses fresh session to avoid holding connection.
     """
-    device = g.esp32_device
-    device.is_connected = True
-    device.last_seen_at = datetime.utcnow()
-    db.session.commit()
+    device_info = g.esp32_device_info
 
-    logger.debug(f"ESP32 heartbeat received: device_id={device.device_id}")
+    device = db.session.get(ESP32Device, device_info["id"])
+    if device:
+        device.is_connected = True
+        device.last_seen_at = datetime.utcnow()
+        db.session.commit()
+    db.session.expire_all()
+
+    logger.debug(f"ESP32 heartbeat received: device_id={device_info['device_id']}")
 
     return (
         jsonify(

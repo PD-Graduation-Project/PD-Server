@@ -59,22 +59,27 @@ def create_test():
         logger.info(
             f"[TEST ROUTE] Sending test_started event for test {test_session.id} to user {current_user.id}"
         )
-        success = connection_manager.send_event(
-            current_user.id,
-            "test_started",
-            {
-                "test_id": test_session.id,
-                "test_type": test_type,
-                "config": config,
-            },
-        )
-        if success:
-            logger.info(
-                f"[TEST ROUTE] test_started event sent successfully to user {current_user.id}"
+        try:
+            success = connection_manager.send_event(
+                current_user.id,
+                "test_started",
+                {
+                    "test_id": test_session.id,
+                    "test_type": test_type,
+                    "config": config,
+                },
             )
-        else:
-            logger.warning(
-                f"[TEST ROUTE] Failed to send test_started event to user {current_user.id}"
+            if success:
+                logger.info(
+                    f"[TEST ROUTE] test_started event sent successfully to user {current_user.id}"
+                )
+            else:
+                logger.warning(
+                    f"[TEST ROUTE] Failed to send test_started event to user {current_user.id}"
+                )
+        except Exception as e:
+            logger.error(
+                f"[TEST ROUTE] Exception while sending test_started event to user {current_user.id}: {e}"
             )
 
     return (

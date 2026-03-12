@@ -39,3 +39,11 @@ class Config:
     @staticmethod
     def init_app(app):
         os.makedirs(Config.UPLOAD_FOLDER, exist_ok=True)
+        # Connection pool settings - only for PostgreSQL/MySQL, not SQLite
+        uri = app.config.get("SQLALCHEMY_DATABASE_URI") or ""
+        if uri and not uri.startswith("sqlite"):
+            app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
+                "pool_size": 10,
+                "max_overflow": 20,
+                "pool_pre_ping": True,
+            }
