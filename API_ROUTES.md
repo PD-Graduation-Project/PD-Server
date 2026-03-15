@@ -1,757 +1,1694 @@
 # API Routes Documentation
 
-## Authentication Routes (`/api/auth`)
+## Overview
+
+| Client | Auth Method | Header |
+|--------|-------------|--------|
+| Mobile App | JWT Bearer token | `Authorization: Bearer <access_token>` |
+| ESP32 Device | Production API key | `X-Device-API-Key: sk_live_...` |
+| ESP32 (factory registration) | Factory HMAC key | `X-Device-API-Key: fk_...` |
+
+**Base URL**: `https://<your-server>/`
+
+---
+
+## Authentication Routes `/api/auth`
+
+> **Client**: Mobile App
+
+---
 
 ### `POST /api/auth/register`
 
-- **Description**: Register a new user account
-- **Request Body**: JSON object containing `email` and `password`
-- **Response**:
-  - Success (201): JSON object with message, auth token, and user data
-  - Error (400): Missing email or password
-  - Error (409): Email already registered
-- **Example Request**:
+Register a new user account. Returns tokens immediately on success.
 
-  ```json
-  {
+**Auth required**: No
+
+**Request body**:
+
+| Field | Type | Required | Constraints |
+|-------|------|----------|-------------|
+| `email` | string | Yes | Valid email format |
+| `password` | string | Yes | Minimum 6 characters |
+
+**Example request**:
+
+```json
+{
+  "email": "user@example.com",
+  "password": "password123"
+}
+```
+
+**Example response** `201`:
+
+```json
+{
+  "message": "Success",
+  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "refresh_token": "dGhpcyBpcyBhIHNlY3VyZSByYW5kb20gdG9rZW4...",
+  "token_type": "Bearer",
+  "expires_in": 900,
+  "user": {
+    "id": 1,
     "email": "user@example.com",
-    "password": "password123"
+    "created_at": "2026-03-15T10:00:00",
+    "age": null,
+    "height": null,
+    "weight": null,
+    "gender": null,
+    "pd_appearance_in_kinship": null,
+    "pd_appearance_in_first_grade_kinship": null
   }
-  ```
+}
+```
 
-- **Example Response**:
+**Error responses**:
 
-  ```json
-  {
-    "message": "Success",
-    "access_token": "eyJ...",
-    "refresh_token": "eyJ...",
-    "token_type": "Bearer",
-    "expires_in": 900,
-    "user": {
-      "id": 1,
-      "email": "user@example.com"
-    }
-  }
-  ```
+| Status | Body |
+|--------|------|
+| `400` | `{"error": "..."}` — validation failed |
+| `409` | `{"error": "Email already registered"}` |
+
+---
 
 ### `POST /api/auth/login`
 
-- **Description**: Authenticate user and return auth token
-- **Request Body**: JSON object containing `email` and `password`
-- **Response**:
-  - Success (200): JSON object with message, auth token, and user data
-  - Error (400): Missing email or password
-  - Error (401): Invalid credentials
-- **Example Request**:
+Authenticate a user and receive access + refresh tokens.
 
-  ```json
-  {
+**Auth required**: No
+
+**Request body**:
+
+| Field | Type | Required | Constraints |
+|-------|------|----------|-------------|
+| `email` | string | Yes | Valid email format |
+| `password` | string | Yes | Minimum 6 characters |
+
+**Example request**:
+
+```json
+{
+  "email": "user@example.com",
+  "password": "password123"
+}
+```
+
+**Example response** `200`:
+
+```json
+{
+  "message": "Success",
+  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "refresh_token": "dGhpcyBpcyBhIHNlY3VyZSByYW5kb20gdG9rZW4...",
+  "token_type": "Bearer",
+  "expires_in": 900,
+  "user": {
+    "id": 1,
     "email": "user@example.com",
-    "password": "password123"
+    "created_at": "2026-03-15T10:00:00",
+    "age": 35,
+    "height": 175,
+    "weight": 70,
+    "gender": "male",
+    "pd_appearance_in_kinship": false,
+    "pd_appearance_in_first_grade_kinship": false
   }
-  ```
+}
+```
+
+**Error responses**:
+
+| Status | Body |
+|--------|------|
+| `400` | `{"error": "..."}` — validation failed |
+| `401` | `{"error": "Invalid credentials"}` |
+
+---
 
 ### `POST /api/auth/refresh`
 
-- **Description**: Refresh access token using refresh token
-- **Headers**: `Authorization: Bearer <token>`
-- **Request Body**: JSON object containing `refresh_token`
-- **Response**:
-  - Success (200): New access token
-  - Error (401): Invalid or expired refresh token
-- **Example Request**:
+Exchange a valid refresh token for a new access token. The old refresh token remains valid until explicitly revoked.
 
-  ```json
-  {
-    "refresh_token": "eyJ..."
-  }
-  ```
+**Auth required**: Yes (JWT — the current, possibly-expiring access token is still required in the header)
 
-- **Example Response**:
+**Request body**:
 
-  ```json
-  {
-    "access_token": "eyJ...",
-    "token_type": "Bearer",
-    "expires_in": 900
-  }
-  ```
+| Field | Type | Required |
+|-------|------|----------|
+| `refresh_token` | string | Yes |
+
+**Example request**:
+
+```json
+{
+  "refresh_token": "dGhpcyBpcyBhIHNlY3VyZSByYW5kb20gdG9rZW4..."
+}
+```
+
+**Example response** `200`:
+
+```json
+{
+  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "token_type": "Bearer",
+  "expires_in": 900
+}
+```
+
+**Error responses**:
+
+| Status | Body |
+|--------|------|
+| `400` | `{"error": "..."}` — validation failed |
+| `401` | `{"error": "Invalid or expired refresh token"}` |
+
+---
 
 ### `POST /api/auth/logout`
 
-- **Description**: Logout and revoke refresh token
-- **Headers**: `Authorization: Bearer <token>`
-- **Request Body**: JSON object containing `refresh_token`
-- **Response**:
-  - Success (200): Logged out successfully
-  - Error (401): Invalid refresh token
+Revoke a specific refresh token (logout from current device).
+
+**Auth required**: Yes (JWT)
+
+**Request body**:
+
+| Field | Type | Required |
+|-------|------|----------|
+| `refresh_token` | string | Yes |
+
+**Example request**:
+
+```json
+{
+  "refresh_token": "dGhpcyBpcyBhIHNlY3VyZSByYW5kb20gdG9rZW4..."
+}
+```
+
+**Example response** `200`:
+
+```json
+{
+  "message": "Logged out successfully"
+}
+```
+
+**Error responses**:
+
+| Status | Body |
+|--------|------|
+| `400` | `{"error": "..."}` — validation failed |
+| `401` | `{"error": "Invalid refresh token"}` |
+
+---
 
 ### `POST /api/auth/logout-all`
 
-- **Description**: Logout from all devices
-- **Headers**: `Authorization: Bearer <token>`
-- **Response**:
-  - Success (200): Logged out from all devices
+Revoke all refresh tokens for the authenticated user (logout from every device).
+
+**Auth required**: Yes (JWT)
+
+**Request body**: None
+
+**Example response** `200`:
+
+```json
+{
+  "message": "Logged out from all devices"
+}
+```
+
+---
 
 ### `GET /api/auth/sessions`
 
-- **Description**: Get all active sessions for the user
-- **Headers**: `Authorization: Bearer <token>`
-- **Response**:
-  - Success (200): List of active sessions with device info, IP, and expiry
+List all active (non-revoked, non-expired) sessions for the current user.
 
-## Test Routes (`/api/tests`)
+**Auth required**: Yes (JWT)
 
-### `POST /api/tests`
+**Example response** `200`:
 
-- **Description**: Create a new test session
-- **Headers**: `Authorization: Bearer <token>`
-- **Request Body**: JSON object
-  - `test_type` (required): One of `tremor`, `drawing`, `voice`
-  - `device` (optional): Override device source - one of `mobile`, `esp32`. If not provided, defaults to `esp32` for tremor tests and `mobile` for drawing/voice tests
-  - `config` (optional): Configuration object for tremor tests (0 through 10)
-- **Response**:
-  - Success (201): Created test session
-  - Error (400): Invalid request data
-  - Error (401): Invalid or missing token
-- **Example Request (tremor with default device)**:
-
-  ```json
-  {
-    "test_type": "tremor",
-    "config": {
-      "0": true,
-      "1": true,
-      "2": false,
-      "10": true
-    }
-  }
-  ```
-
-- **Example Request (tremor with device override)**:
-
-  ```json
-  {
-    "test_type": "tremor",
-    "device": "mobile",
-    "config": {
-      "0": true,
-      "1": true
-    }
-  }
-  ```
-
-- **Example Request (drawing/voice)**:
-
-  ```json
-  {
-    "test_type": "drawing"
-  }
-  ```
-
-- **Example Response**:
-
-  ```json
-  {
-    "success": true,
-    "data": {
+```json
+{
+  "sessions": [
+    {
       "id": 1,
-      "user_id": 1,
-      "test_type": "tremor",
-      "status": "pending",
-      "device_source": "esp32",
-      "config": {
-        "0": true,
-        "1": true
-      },
-      "created_at": "2026-02-09T10:00:00Z",
-      "completed_at": null,
-      "ml_score": null,
-      "inputs": []
+      "device_info": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0...)",
+      "ip_address": "192.168.1.100",
+      "created_at": "2026-03-15T10:00:00",
+      "expires_at": "2026-04-14T10:00:00"
+    },
+    {
+      "id": 2,
+      "device_info": "MyApp/1.0 Android",
+      "ip_address": "10.0.0.5",
+      "created_at": "2026-03-14T08:30:00",
+      "expires_at": "2026-04-13T08:30:00"
     }
+  ]
+}
+```
+
+---
+
+## User Routes `/api/user`
+
+> **Client**: Mobile App
+
+---
+
+### `GET /api/user/`
+
+Get the current user's profile and demographic information.
+
+**Auth required**: Yes (JWT)
+
+**Example response** `200`:
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": 1,
+    "age": 35,
+    "height": 175,
+    "weight": 70,
+    "gender": "male",
+    "pd_appearance_in_kinship": false,
+    "pd_appearance_in_first_grade_kinship": false
   }
-  ```
+}
+```
 
-### `GET /api/tests`
+**Error responses**:
 
-- **Description**: List user's tests with pagination and filters
-- **Headers**: `Authorization: Bearer <token>`
-- **Query Parameters**:
-  - `test_type` (optional): Filter by `tremor`, `drawing`, or `voice`
-  - `status` (optional): Filter by `pending`, `in_progress`, `completed`, `failed`
-  - `page` (optional): Page number (default: 1)
-  - `per_page` (optional): Items per page (default: 20, max: 100)
-- **Response**:
-  - Success (200): List of tests with pagination info
-  - Error (401): Invalid or missing token
-- **Example Response**:
+| Status | Body |
+|--------|------|
+| `401` | `{"error": "..."}` |
+| `404` | `{"error": "User not found"}` |
 
-  ```json
-  {
-    "success": true,
-    "data": {
-      "tests": [
-        {
-          "id": 1,
-          "user_id": 1,
-          "test_type": "tremor",
-          "status": "completed",
-          "device_source": "esp32",
-          "config": {"0": true},
-          "created_at": "2026-02-09T10:00:00Z",
-          "completed_at": "2026-02-09T10:00:30Z",
-          "ml_score": 0.72,
-          "inputs": []
-        }
-      ],
-      "total": 1,
-      "page": 1,
-      "per_page": 20,
-      "pages": 1
-    }
+---
+
+### `PATCH /api/user/`
+
+Update user demographic information. All fields are optional; only provided fields are updated.
+
+**Auth required**: Yes (JWT)
+
+**Request body**:
+
+| Field | Type | Required | Constraints |
+|-------|------|----------|-------------|
+| `age` | integer | No | 0–100 |
+| `height` | integer | No | 0–300 (cm) |
+| `weight` | integer | No | 0–500 (kg) |
+| `gender` | string | No | `"male"` or `"female"` |
+| `pd_appearance_in_kinship` | boolean | No | |
+| `pd_appearance_in_first_grade_kinship` | boolean | No | |
+
+**Example request**:
+
+```json
+{
+  "age": 42,
+  "height": 180,
+  "weight": 75,
+  "gender": "male",
+  "pd_appearance_in_kinship": true,
+  "pd_appearance_in_first_grade_kinship": false
+}
+```
+
+**Example response** `200`:
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": 1,
+    "age": 42,
+    "height": 180,
+    "weight": 75,
+    "gender": "male",
+    "pd_appearance_in_kinship": true,
+    "pd_appearance_in_first_grade_kinship": false
   }
-  ```
+}
+```
 
-### `GET /api/tests/<test_id>`
+**Error responses**:
 
-- **Description**: Get a specific test session by ID
-- **Headers**: `Authorization: Bearer <token>`
-- **Response**:
-  - Success (200): Test session data
-  - Error (401): Invalid or missing token
-  - Error (403): Forbidden (test belongs to another user)
-  - Error (404): Test not found
-- **Example Response**:
+| Status | Body |
+|--------|------|
+| `400` | `{"success": false, "error": "Validation failed", "message": "..."}` |
+| `401` | `{"error": "..."}` |
+| `404` | `{"error": "User not found"}` |
 
-  ```json
-  {
-    "success": true,
-    "data": {
-      "id": 1,
-      "user_id": 1,
-      "test_type": "tremor",
-      "status": "completed",
-      "device_source": "esp32",
-      "config": {"0": true, "1": true},
-      "created_at": "2026-02-09T10:00:00Z",
-      "completed_at": "2026-02-09T10:00:30Z",
-      "ml_score": 0.72,
-      "inputs": [
-        {
-          "id": 1,
-          "input_type": "tremor_gyro",
-          "file_path": "/uploads/tremor/1/1_0_l.txt",
-          "mime_type": "text/plain",
-          "file_size": 1024,
-          "created_at": "2026-02-09T10:00:25Z",
-          "expires_at": "2026-05-10T10:00:00Z"
-        }
-      ]
-    }
-  }
-  ```
-
-### `POST /api/tests/<test_id>/tremor`
-
-- **Description**: Upload gyro data for a tremor test
-- **Authentication**:
-  - JWT Bearer token for mobile uploads
-  - `X-Device-API-Key` header for ESP32 uploads
-- **Request**: Accepts either `multipart/form-data` (file upload) or `application/json` (IMU data arrays)
-
-#### Option 1: JSON Body with IMU Data (Recommended for ESP32)
-
-- **Content-Type**: `application/json`
-- **Request Body**:
-  - `subtest_id` or `subtest` (required): Subtest name (`0` to `10`)
-  - `hand` (required): Hand (`left`, `right`, `l`, or `r`)
-  - `imu_data` (required): Object containing IMU arrays
-    - `ax` (required): List of accelerometer X values
-    - `ay` (required): List of accelerometer Y values
-    - `az` (required): List of accelerometer Z values
-    - `gx` (required): List of gyroscope X values
-    - `gy` (required): List of gyroscope Y values
-    - `gz` (required): List of gyroscope Z values
-
-- **Example Request**:
-
-  ```json
-  {
-    "subtest_id": "0",
-    "hand": "left",
-    "imu_data": {
-      "ax": [0.1, 0.2, 0.3],
-      "ay": [0.1, 0.2, 0.3],
-      "az": [9.8, 9.9, 10.0],
-      "gx": [0.01, 0.02, 0.03],
-      "gy": [0.01, 0.02, 0.03],
-      "gz": [0.01, 0.02, 0.03]
-    }
-  }
-  ```
-
-- **Output File Format**: The server converts the IMU arrays to a TXT file with the following CSV-style format:
-
-  ```
-  const,ax,ay,az,gx,gy,gz
-  0,0.1,0.1,9.8,0.01,0.01,0.01
-  1,0.2,0.2,9.9,0.02,0.02,0.02
-  2,0.3,0.3,10.0,0.03,0.03,0.03
-  ```
-
-#### Option 2: Multipart Form Data (File Upload)
-
-- **Content-Type**: `multipart/form-data`
-  - `file` (required): TXT file with gyro data
-  - `subtest` (required): Subtest name (`0` to `10`)
-  - `hand` (required): Hand (`l` for left, `r` for right)
-
-- **Example Response**:
-
-  ```json
-  {
-    "success": true,
-    "data": {
-      "id": 1,
-      "input_type": "tremor_gyro",
-      "subtest": "0",
-      "hand": "l",
-      "file_path": "/uploads/tremor/1/1_0_l.txt"
-    }
-  }
-  ```
-
-- **Error Responses**:
-  - Success (200): File uploaded, TestInput created
-  - Error (400): Missing file, invalid subtest, invalid hand, or array length mismatch
-  - Error (401): Unauthorized
-  - Error (403]: Forbidden (test belongs to another user)
-
-### `POST /api/tests/<test_id>/drawings`
-
-- **Description**: Upload spiral drawing images for a drawing test
-- **Headers**: `Authorization: Bearer <token>`
-- **Request**: `multipart/form-data`
-  - `spiral_left` (required): Left hand spiral image (PNG/JPG)
-  - `spiral_right` (required): Right hand spiral image (PNG/JPG)
-- **Response**:
-  - Success (200): Both images uploaded
-  - Error (400): Missing one or both images
-  - Error (401): Unauthorized
-  - Error (403): Forbidden (test belongs to another user)
-- **Example Response**:
-
-  ```json
-  {
-    "success": true,
-    "data": {
-      "inputs": [
-        {
-          "id": 10,
-          "input_type": "drawing_spiral",
-          "hand": "l",
-          "file_path": "/uploads/drawing/2/spiral_left.png"
-        },
-        {
-          "id": 11,
-          "input_type": "drawing_spiral",
-          "hand": "r",
-          "file_path": "/uploads/drawing/2/spiral_right.png"
-        }
-      ]
-    }
-  }
-  ```
-
-### `POST /api/tests/<test_id>/voice`
-
-- **Description**: Upload a voice recording for a voice test
-- **Headers**: `Authorization: Bearer <token>`
-- **Request**: `multipart/form-data`
-  - `audio` (required): Audio file (WAV/MP3/M4A)
-- **Response**:
-  - Success (200): Audio uploaded
-  - Error (400): No audio file provided
-  - Error (401): Unauthorized
-  - Error (403): Forbidden (test belongs to another user)
-- **Example Response**:
-
-  ```json
-  {
-    "success": true,
-    "data": {
-      "id": 20,
-      "input_type": "voice_recording",
-      "file_path": "/uploads/voice/3/recording.wav"
-    }
-  }
-  ```
-
-### `POST /api/tests/<test_id>/complete`
-
-- **Description**: Mark a test as completed. Runs ML model to generate score.
-- **Authentication**:
-  - JWT Bearer token for mobile
-  - `X-Device-API-Key` header for ESP32
-- **Response**:
-  - Success (200): Test completed, ml_score generated
-  - Error (400): Already completed or no uploads yet
-  - Error (401): Unauthorized
-  - Error (403): Forbidden (test belongs to another user)
-- **Example Response**:
-
-  ```json
-  {
-    "success": true,
-    "data": {
-      "message": "Test completed",
-      "status": "completed",
-      "ml_score": 0.72,
-      "uploaded_count": 20,
-      "expected_count": 20,
-      "missing": []
-    }
-  }
-  ```
-
-## ESP32 Device Routes (`/api/esp32-devices`)
-
-### `POST /api/esp32-devices/pair`
-
-- **Description**: Pair an ESP32 device to the current user account
-- **Headers**: `Authorization: Bearer <token>`
-- **Request Body**: JSON object
-  - `device_id` (required): Device ID from sticker on ESP32 (e.g., `ESP32-001234`)
-  - `name` (optional): User-friendly name for the device
-- **Response**:
-  - Success (200): Device paired successfully
-  - Error (400): Missing device_id
-  - Error (401): Invalid or missing token
-  - Error (404): Device not found in database
-  - Error (409): Device already paired to another user
-- **Example Request**:
-
-  ```json
-  {
-    "device_id": "ESP32-001234",
-    "name": "My Tremor Sensor"
-  }
-  ```
-
-- **Example Response**:
-
-  ```json
-  {
-    "success": true,
-    "data": {
-      "id": 1,
-      "device_id": "ESP32-001234",
-      "name": "My Tremor Sensor",
-      "is_connected": false,
-      "created_at": "2026-02-09T10:00:00Z"
-    }
-  }
-  ```
-
-### `GET /api/esp32-devices`
-
-- **Description**: List all ESP32 devices paired to the current user's account
-- **Headers**: `Authorization: Bearer <token>`
-- **Response**:
-  - Success (200): List of paired devices
-  - Error (401): Invalid or missing token
-- **Example Response**:
-
-  ```json
-  {
-    "success": true,
-    "data": [
-      {
-        "id": 1,
-        "device_id": "ESP32-001234",
-        "name": "My Tremor Sensor",
-        "is_connected": true,
-        "last_seen_at": "2026-02-09T10:00:00Z",
-        "created_at": "2026-02-09T10:00:00Z"
-      }
-    ]
-  }
-  ```
-
-### `DELETE /api/esp32-devices/<db_id>`
-
-- **Description**: Unpair an ESP32 device from the current user's account
-- **Headers**: `Authorization: Bearer <token>`
-- **URL Parameters**:
-  - `db_id` (required): The database ID of the device (not the device_id string)
-- **Response**:
-  - Success (200): Device unpaired
-  - Error (401): Invalid or missing token
-  - Error (404): Device not found or not paired to this user
-- **Example Response**:
-
-  ```json
-  {
-    "success": true,
-    "message": "Device unpaired successfully"
-  }
-  ```
-
-## ESP32 Device Registration Routes (`/api/esp32`)
-
-These routes are used by the ESP32 device itself, not by the mobile app.
-
-### `POST /api/esp32/register`
-
-- **Description**: Register ESP32 device and receive production API key. Verifies factory key using HMAC.
-- **Authentication**: Factory API key in header (HMAC-derived)
-- **Headers**: `X-Device-API-Key: <factory_api_key>` (format: `fk_<32-hex-chars>`)
-- **Request Body**: JSON object
-  - `device_id` (required): Device ID in format `ESP32-XXXXXX` (6 hex chars from MAC address)
-- **Response**:
-  - Success (200): Device registered, returns production API key
-  - Error (401): Invalid factory key format or HMAC mismatch
-  - Error (400): Missing device_id or invalid device_id format
-- **Note**: Factory key is generated during manufacturing using HMAC-SHA256 from device_id and a shared secret. Device is created in DB on first registration.
-- **Example Request**:
-
-  ```json
-  {
-    "device_id": "ESP32-AABBCC"
-  }
-  ```
-
-- **Example Response**:
-
-  ```json
-  {
-    "success": true,
-    "data": {
-      "device_id": "ESP32-AABBCC",
-      "api_key": "sk_live_abc123def456..."
-    }
-  }
-  ```
-
-### `GET /api/esp32/stream`
-
-- **Description**: Server-Sent Events stream for ESP32 devices to receive test_started events
-- **Headers**: `X-Device-API-Key: <production_api_key>`
-- **Response**: SSE stream (HTTP 200, connection kept open)
-- **SSE Events**:
-  - `connected`: Initial connection event
-  - `test_started`: When mobile app starts a tremor test for this device's user
-  - `heartbeat`: Periodic keep-alive event (every 30 seconds)
-- **Example Events**:
-
-  ```
-  event: connected
-  data: {"device_id": "ESP32-001234"}
-
-  event: test_started
-  data: {"test_id": 5, "test_type": "tremor", "config": {"0": true, "1": true}}
-
-  event: heartbeat
-  data: {"timestamp": "2026-02-09T10:00:00Z"}
-  ```
-
-### `POST /api/esp32/heartbeat`
-
-- **Description**: Report ESP32 device is online (keep-alive)
-- **Headers**: `X-Device-API-Key: <production_api_key>`
-- **Response**:
-  - Success (200): Heartbeat recorded
-  - Error (401): Invalid API key
-  - Error (403): Device not paired to any user
-- **Example Response**:
-
-  ```json
-  {
-    "success": true,
-    "message": "Heartbeat received"
-  }
-  ```
-
-## User Routes (`/api/user`)
-
-### `GET /api/user`
-
-- **Description**: Get current user's information
-- **Headers**: `Authorization: Bearer <token>`
-- **Response**:
-  - Success (200): User demographics data
-  - Error (401): Invalid or missing token
-  - Error (404): User not found
-
-### `PATCH /api/user`
-
-- **Description**: Update user demographics
-- **Headers**: `Authorization: Bearer <token>`
-- **Request Body**: JSON object with fields to update
-  - Demographics: `age`, `height`, `weight`, `gender`
-  - PD Info: `pd_appearance_in_kinship`, `pd_appearance_in_first_grade_kinship`
-  - Questionnaire: `Q01` - `Q28` (boolean)
-- **Response**:
-  - Success (200): Updated user data
-  - Error (400): Validation failed
-  - Error (401): Invalid or missing token
+---
 
 ### `POST /api/user/reset`
 
-- **Description**: Reset user data (demographics only, not questionnaire)
-- **Headers**: `Authorization: Bearer <token>`
-- **Response**:
-  - Success (200): User data reset
-  - Error (401): Invalid or missing token
+Reset all demographic fields to `null`. Does **not** reset questionnaire responses or delete the account.
 
-### `DELETE /api/user`
+**Auth required**: Yes (JWT)
 
-- **Description**: Delete user account
-- **Headers**: `Authorization: Bearer <token>`
-- **Response**:
-  - Success (200): Account deleted
-  - Error (401): Invalid or missing token
+**Request body**: None
 
-## Questionnaire Routes (`/api/questionnaire`)
+**Example response** `200`:
 
-### `GET /api/questionnaire`
+```json
+{
+  "success": true,
+  "message": "User data reset"
+}
+```
 
-- **Description**: Get all questionnaire responses
-- **Headers**: `Authorization: Bearer <token>`
-- **Response**:
-  - Success (200): Object with Q01-Q28 responses
+**Fields reset**: `age`, `height`, `weight`, `gender`, `pd_appearance_in_kinship`, `pd_appearance_in_first_grade_kinship`
 
-  ```json
-  {
-    "success": true,
-    "data": {
-      "Q01": true,
-      "Q02": false,
-      ...
-    }
-  }
-  ```
+**Error responses**:
 
-### `PATCH /api/questionnaire`
+| Status | Body |
+|--------|------|
+| `401` | `{"error": "..."}` |
+| `404` | `{"error": "User not found"}` |
+| `500` | `{"success": false, "error": "..."}` |
 
-- **Description**: Update questionnaire responses
-- **Headers**: `Authorization: Bearer <token>`
-- **Request Body**: Object with questions to update
+---
 
-  ```json
-  {
+### `DELETE /api/user/`
+
+Permanently delete the current user account and all associated data.
+
+**Auth required**: Yes (JWT)
+
+**Request body**: None
+
+**Example response** `200`:
+
+```json
+{
+  "success": true,
+  "message": "Account deleted"
+}
+```
+
+**Error responses**:
+
+| Status | Body |
+|--------|------|
+| `401` | `{"error": "..."}` |
+| `404` | `{"error": "User not found"}` |
+| `500` | `{"success": false, "error": "..."}` |
+
+---
+
+## Questionnaire Routes `/api/questionnaire`
+
+> **Client**: Mobile App
+
+Questions `Q01`–`Q28` are boolean fields on the user. Each represents a symptom or risk-factor question. All are `null` by default (unanswered).
+
+---
+
+### `GET /api/questionnaire/`
+
+Get all 28 questionnaire responses for the current user.
+
+**Auth required**: Yes (JWT)
+
+**Example response** `200`:
+
+```json
+{
+  "success": true,
+  "data": {
     "Q01": true,
-    "Q05": false
+    "Q02": false,
+    "Q03": null,
+    "Q04": null,
+    "Q05": true,
+    "Q06": false,
+    "Q07": null,
+    "Q08": null,
+    "Q09": true,
+    "Q10": false,
+    "Q11": null,
+    "Q12": null,
+    "Q13": true,
+    "Q14": false,
+    "Q15": null,
+    "Q16": null,
+    "Q17": true,
+    "Q18": false,
+    "Q19": null,
+    "Q20": null,
+    "Q21": true,
+    "Q22": false,
+    "Q23": null,
+    "Q24": null,
+    "Q25": true,
+    "Q26": false,
+    "Q27": null,
+    "Q28": null
   }
-  ```
+}
+```
 
-- **Response**:
-  - Success (200): Updated fields list
-  - Error (400): Invalid data or no valid fields
+**Error responses**:
 
-## Health Check Route
+| Status | Body |
+|--------|------|
+| `401` | `{"error": "..."}` |
+| `404` | `{"error": "User not found"}` |
+
+---
+
+### `PATCH /api/questionnaire/`
+
+Partially update questionnaire responses. Send only the questions you want to update. Values must be boolean (`true` / `false`) or `null` to clear.
+
+**Auth required**: Yes (JWT)
+
+**Request body**: Object where keys are `Q01`–`Q28` and values are `boolean` or `null`.
+
+**Example request** (update a few questions):
+
+```json
+{
+  "Q01": true,
+  "Q05": false,
+  "Q12": null
+}
+```
+
+**Example response** `200`:
+
+```json
+{
+  "success": true,
+  "updated": ["Q01", "Q05", "Q12"]
+}
+```
+
+**Error responses**:
+
+| Status | Body |
+|--------|------|
+| `400` | `{"success": false, "error": "No valid fields provided"}` — no recognized question keys sent |
+| `400` | `{"success": false, "error": "Q01 must be boolean"}` — non-boolean value |
+| `401` | `{"error": "..."}` |
+| `404` | `{"error": "User not found"}` |
+| `500` | `{"success": false, "error": "..."}` |
+
+---
+
+## Test Group Routes `/api/groups`
+
+> **Client**: Mobile App
+
+A **test group** bundles one tremor, one drawing, and one voice `TestSession` into a single assessment session. The mobile app must create a group first, then create each of the three tests referencing the returned `group_id`.
+
+**Group lifecycle**:
+1. `POST /api/groups` → group created, `status = "pending"`
+2. `POST /api/tests` (first test, any type) → group advances to `status = "in_progress"`
+3. After all three tests are individually completed via `POST /api/tests/<id>/complete`, the server computes `overall_score` and sets `status = "completed"`
+
+---
+
+### `POST /api/groups`
+
+Create a new test group. No request body required.
+
+**Auth required**: Yes (JWT)
+
+**Request body**: None (empty body or `{}`)
+
+**Example response** `201`:
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": 3,
+    "user_id": 1,
+    "status": "pending",
+    "overall_score": null,
+    "created_at": "2026-03-15T10:00:00",
+    "completed_at": null,
+    "tests": []
+  }
+}
+```
+
+**Error responses**:
+
+| Status | Body |
+|--------|------|
+| `401` | `{"error": "..."}` |
+
+---
+
+### `GET /api/groups`
+
+List all test groups for the current user with optional status filter and pagination.
+
+**Auth required**: Yes (JWT)
+
+**Query parameters**:
+
+| Parameter | Type | Required | Constraints |
+|-----------|------|----------|-------------|
+| `status` | string | No | `"pending"`, `"in_progress"`, `"completed"` |
+| `page` | integer | No | Default: `1`, min: `1` |
+| `per_page` | integer | No | Default: `20`, min: `1`, max: `100` |
+
+**Example request**:
+
+```
+GET /api/groups?status=completed&page=1&per_page=10
+```
+
+**Example response** `200`:
+
+```json
+{
+  "success": true,
+  "data": {
+    "groups": [
+      {
+        "id": 3,
+        "user_id": 1,
+        "status": "completed",
+        "overall_score": 0.68,
+        "created_at": "2026-03-15T10:00:00",
+        "completed_at": "2026-03-15T10:30:00",
+        "tests": [
+          {
+            "id": 7,
+            "user_id": 1,
+            "group_id": 3,
+            "test_type": "tremor",
+            "status": "completed",
+            "device_source": "esp32",
+            "config": {"0": true, "1": true},
+            "created_at": "2026-03-15T10:01:00",
+            "completed_at": "2026-03-15T10:08:00",
+            "ml_score": 0.72,
+            "inputs": []
+          },
+          {
+            "id": 8,
+            "user_id": 1,
+            "group_id": 3,
+            "test_type": "drawing",
+            "status": "completed",
+            "device_source": "mobile",
+            "config": {},
+            "created_at": "2026-03-15T10:10:00",
+            "completed_at": "2026-03-15T10:15:00",
+            "ml_score": 0.60,
+            "inputs": []
+          },
+          {
+            "id": 9,
+            "user_id": 1,
+            "group_id": 3,
+            "test_type": "voice",
+            "status": "completed",
+            "device_source": "mobile",
+            "config": {},
+            "created_at": "2026-03-15T10:20:00",
+            "completed_at": "2026-03-15T10:25:00",
+            "ml_score": 0.55,
+            "inputs": []
+          }
+        ]
+      }
+    ],
+    "total": 1,
+    "page": 1,
+    "per_page": 10,
+    "pages": 1
+  }
+}
+```
+
+**Error responses**:
+
+| Status | Body |
+|--------|------|
+| `400` | `{"success": false, "error": "..."}` — invalid query params |
+| `401` | `{"error": "..."}` |
+
+---
+
+### `GET /api/groups/<group_id>`
+
+Get a single group by ID, including all linked test sessions and their file inputs.
+
+**Auth required**: Yes (JWT)
+
+**URL parameters**:
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `group_id` | integer | Group ID |
+
+**Example request**:
+
+```
+GET /api/groups/3
+```
+
+**Example response** `200`:
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": 3,
+    "user_id": 1,
+    "status": "completed",
+    "overall_score": 0.68,
+    "created_at": "2026-03-15T10:00:00",
+    "completed_at": "2026-03-15T10:30:00",
+    "tests": [
+      {
+        "id": 7,
+        "user_id": 1,
+        "group_id": 3,
+        "test_type": "tremor",
+        "status": "completed",
+        "device_source": "esp32",
+        "config": {"0": true, "1": true},
+        "created_at": "2026-03-15T10:01:00",
+        "completed_at": "2026-03-15T10:08:00",
+        "ml_score": 0.72,
+        "inputs": [
+          {
+            "id": 3,
+            "input_type": "tremor_gyro",
+            "file_path": "uploads/tremor/7/7_0_l.txt",
+            "mime_type": "text/plain",
+            "file_size": 2048,
+            "created_at": "2026-03-15T10:05:00",
+            "expires_at": "2026-06-13T10:05:00"
+          }
+        ]
+      },
+      {
+        "id": 8,
+        "user_id": 1,
+        "group_id": 3,
+        "test_type": "drawing",
+        "status": "completed",
+        "device_source": "mobile",
+        "config": {},
+        "created_at": "2026-03-15T10:10:00",
+        "completed_at": "2026-03-15T10:15:00",
+        "ml_score": 0.60,
+        "inputs": []
+      },
+      {
+        "id": 9,
+        "user_id": 1,
+        "group_id": 3,
+        "test_type": "voice",
+        "status": "completed",
+        "device_source": "mobile",
+        "config": {},
+        "created_at": "2026-03-15T10:20:00",
+        "completed_at": "2026-03-15T10:25:00",
+        "ml_score": 0.55,
+        "inputs": []
+      }
+    ]
+  }
+}
+```
+
+**Error responses**:
+
+| Status | Body |
+|--------|------|
+| `401` | `{"error": "..."}` |
+| `403` | `{"error": "Forbidden"}` |
+| `404` | `{"error": "Group not found"}` |
+
+---
+
+## Test Routes `/api/tests`
+
+> **Client**: Mobile App (create, list, get, drawings, voice) + ESP32 (tremor upload, complete)
+
+---
+
+### `POST /api/tests`
+
+Create a new test session inside an existing group. For tremor tests with `device_source = "esp32"`, this automatically fires a `test_started` SSE event to the user's connected ESP32 device.
+
+**Auth required**: Yes (JWT — Mobile App)
+
+**Request body**:
+
+| Field | Type | Required | Constraints |
+|-------|------|----------|-------------|
+| `group_id` | integer | Yes | Must be a group owned by the current user and not yet completed |
+| `test_type` | string | Yes | `"tremor"`, `"drawing"`, or `"voice"` |
+| `device` | string | No | `"mobile"` or `"esp32"`. Defaults to `"esp32"` for tremor, `"mobile"` for drawing/voice |
+| `config` | object | No | For tremor tests: keys `"0"`–`"10"`, values `boolean`. Omitted keys default to `false` |
+
+**Notes**:
+- Each test type can appear **once** per group. A second attempt with the same `test_type` returns `409`.
+- Adding the first test to a group advances the group from `"pending"` to `"in_progress"`.
+
+**Example request** — tremor test via ESP32:
+
+```json
+{
+  "group_id": 3,
+  "test_type": "tremor",
+  "config": {
+    "0": true,
+    "1": true,
+    "2": false,
+    "5": true,
+    "10": true
+  }
+}
+```
+
+**Example request** — tremor test via mobile (override):
+
+```json
+{
+  "group_id": 3,
+  "test_type": "tremor",
+  "device": "mobile",
+  "config": {
+    "0": true,
+    "1": true
+  }
+}
+```
+
+**Example request** — drawing test:
+
+```json
+{
+  "group_id": 3,
+  "test_type": "drawing"
+}
+```
+
+**Example request** — voice test:
+
+```json
+{
+  "group_id": 3,
+  "test_type": "voice"
+}
+```
+
+**Example response** `201`:
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": 7,
+    "user_id": 1,
+    "group_id": 3,
+    "test_type": "tremor",
+    "status": "pending",
+    "device_source": "esp32",
+    "config": {
+      "0": true,
+      "1": true,
+      "5": true,
+      "10": true
+    },
+    "created_at": "2026-03-15T10:00:00",
+    "completed_at": null,
+    "ml_score": null,
+    "inputs": []
+  }
+}
+```
+
+**Error responses**:
+
+| Status | Body |
+|--------|------|
+| `400` | `{"success": false, "error": "..."}` — validation failed |
+| `401` | `{"error": "..."}` |
+| `403` | `{"error": "Forbidden"}` — group belongs to another user |
+| `404` | `{"error": "User not found"}` |
+| `404` | `{"error": "Group not found"}` |
+| `409` | `{"error": "Group is already completed"}` |
+| `409` | `{"error": "A tremor test already exists in this group"}` |
+
+---
+
+### `GET /api/tests`
+
+List all test sessions for the current user, with optional filtering and pagination.
+
+**Auth required**: Yes (JWT — Mobile App)
+
+**Query parameters**:
+
+| Parameter | Type | Required | Constraints |
+|-----------|------|----------|-------------|
+| `test_type` | string | No | `"tremor"`, `"drawing"`, or `"voice"` |
+| `status` | string | No | `"pending"`, `"in_progress"`, `"completed"`, `"failed"` |
+| `group_id` | integer | No | Filter by group |
+| `page` | integer | No | Default: `1`, min: `1` |
+| `per_page` | integer | No | Default: `20`, min: `1`, max: `100` |
+
+**Example request**:
+
+```
+GET /api/tests?test_type=tremor&status=completed&page=1&per_page=10
+```
+
+**Example response** `200`:
+
+```json
+{
+  "success": true,
+  "data": {
+    "tests": [
+      {
+        "id": 7,
+        "user_id": 1,
+        "test_type": "tremor",
+        "status": "completed",
+        "device_source": "esp32",
+        "config": {"0": true, "1": true},
+        "created_at": "2026-03-15T10:00:00",
+        "completed_at": "2026-03-15T10:05:30",
+        "ml_score": 0.72,
+        "inputs": [
+          {
+            "id": 3,
+            "input_type": "tremor_gyro",
+            "file_path": "uploads/tremor/7/7_0_l.txt",
+            "mime_type": "text/plain",
+            "file_size": 2048,
+            "created_at": "2026-03-15T10:02:00",
+            "expires_at": "2026-06-13T10:02:00"
+          }
+        ]
+      }
+    ],
+    "total": 1,
+    "page": 1,
+    "per_page": 10,
+    "pages": 1
+  }
+}
+```
+
+**Error responses**:
+
+| Status | Body |
+|--------|------|
+| `400` | `{"success": false, "error": "..."}` — invalid query params |
+| `401` | `{"error": "..."}` |
+| `404` | `{"error": "User not found"}` |
+
+---
+
+### `GET /api/tests/<test_id>`
+
+Get a single test session by its database ID.
+
+**Auth required**: Yes (JWT — Mobile App)
+
+**URL parameters**:
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `test_id` | integer | Test session ID |
+
+**Example request**:
+
+```
+GET /api/tests/7
+```
+
+**Example response** `200`:
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": 7,
+    "user_id": 1,
+    "test_type": "tremor",
+    "status": "completed",
+    "device_source": "esp32",
+    "config": {"0": true, "1": true, "5": true},
+    "created_at": "2026-03-15T10:00:00",
+    "completed_at": "2026-03-15T10:05:30",
+    "ml_score": 0.72,
+    "inputs": [
+      {
+        "id": 3,
+        "input_type": "tremor_gyro",
+        "file_path": "uploads/tremor/7/7_0_l.txt",
+        "mime_type": "text/plain",
+        "file_size": 2048,
+        "created_at": "2026-03-15T10:02:00",
+        "expires_at": "2026-06-13T10:02:00"
+      },
+      {
+        "id": 4,
+        "input_type": "tremor_gyro",
+        "file_path": "uploads/tremor/7/7_0_r.txt",
+        "mime_type": "text/plain",
+        "file_size": 2104,
+        "created_at": "2026-03-15T10:02:15",
+        "expires_at": "2026-06-13T10:02:15"
+      }
+    ]
+  }
+}
+```
+
+**Error responses**:
+
+| Status | Body |
+|--------|------|
+| `401` | `{"error": "..."}` |
+| `403` | `{"error": "Forbidden"}` |
+| `404` | `{"error": "Test not found"}` |
+
+---
+
+### `POST /api/tests/<test_id>/tremor`
+
+Upload IMU (gyroscope/accelerometer) data for one hand/subtest of a tremor test.
+
+**Auth required**: JWT (Mobile App) **or** `X-Device-API-Key` (ESP32)
+
+**URL parameters**:
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `test_id` | integer | Must be a `tremor` type test owned by the authenticated user |
+
+This endpoint accepts two content types:
+
+---
+
+#### Option A — JSON body (ESP32 recommended)
+
+**Content-Type**: `application/json`
+
+**Request body**:
+
+| Field | Type | Required | Notes |
+|-------|------|----------|-------|
+| `subtest_id` or `subtest` | string | Yes | `"0"` to `"10"` |
+| `hand` | string | Yes | `"left"`, `"right"`, `"l"`, or `"r"` |
+| `imu_data` | object | Yes | Object containing 6 arrays (see below) |
+| `imu_data.ax` | float[] | Yes | Accelerometer X axis |
+| `imu_data.ay` | float[] | Yes | Accelerometer Y axis |
+| `imu_data.az` | float[] | Yes | Accelerometer Z axis |
+| `imu_data.gx` | float[] | Yes | Gyroscope X axis |
+| `imu_data.gy` | float[] | Yes | Gyroscope Y axis |
+| `imu_data.gz` | float[] | Yes | Gyroscope Z axis |
+
+All 6 arrays must be present. They should all be the same length.
+
+**Example request**:
+
+```json
+{
+  "subtest_id": "0",
+  "hand": "left",
+  "imu_data": {
+    "ax": [0.12, 0.15, 0.11, 0.09],
+    "ay": [0.05, 0.07, 0.06, 0.04],
+    "az": [9.81, 9.80, 9.82, 9.79],
+    "gx": [0.001, 0.002, 0.001, 0.003],
+    "gy": [0.002, 0.001, 0.003, 0.001],
+    "gz": [0.000, 0.001, 0.000, 0.002]
+  }
+}
+```
+
+The server saves this as a TXT file with the following CSV format:
+
+```
+const,ax,ay,az,gx,gy,gz
+0,0.12,0.05,9.81,0.001,0.002,0.0
+1,0.15,0.07,9.80,0.002,0.001,0.001
+2,0.11,0.06,9.82,0.001,0.003,0.0
+3,0.09,0.04,9.79,0.003,0.001,0.002
+```
+
+---
+
+#### Option B — Multipart file upload (Mobile App)
+
+**Content-Type**: `multipart/form-data`
+
+| Field | Type | Required | Notes |
+|-------|------|----------|-------|
+| `file` | file | Yes | `.txt` file with gyro data |
+| `subtest` | string | Yes | `"0"` to `"10"` |
+| `hand` | string | Yes | `"l"` or `"r"` |
+
+---
+
+**Example response** `200` (both options):
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": 3,
+    "input_type": "tremor_gyro",
+    "subtest": "0",
+    "hand": "l",
+    "file_path": "uploads/tremor/7/7_0_l.txt"
+  }
+}
+```
+
+**Error responses**:
+
+| Status | Body |
+|--------|------|
+| `400` | `{"error": "subtest_id is required"}` |
+| `400` | `{"error": "hand is required"}` |
+| `400` | `{"error": "Invalid hand: must be 'left', 'right', 'l', or 'r'"}` |
+| `400` | `{"error": "imu_data is required and must be an object"}` |
+| `400` | `{"error": "imu_data missing keys: gx, gy"}` |
+| `400` | `{"error": "imu_data.ax must be an array"}` |
+| `400` | `{"error": "Invalid subtest: 11"}` |
+| `400` | `{"error": "Subtest 0 is not enabled for this test"}` |
+| `400` | `{"error": "Test is not a tremor test"}` |
+| `401` | `{"error": "..."}` |
+| `403` | `{"error": "Forbidden"}` |
+| `404` | `{"error": "Test not found"}` |
+
+---
+
+### `POST /api/tests/<test_id>/drawings`
+
+Upload spiral drawing images (both hands required in a single request) for a drawing test.
+
+**Auth required**: Yes (JWT — Mobile App)
+
+**Content-Type**: `multipart/form-data`
+
+| Field | Type | Required | Notes |
+|-------|------|----------|-------|
+| `spiral_left` | file | Yes | Left hand spiral image (PNG/JPG) |
+| `spiral_right` | file | Yes | Right hand spiral image (PNG/JPG) |
+
+**Example response** `200`:
+
+```json
+{
+  "success": true,
+  "data": {
+    "inputs": [
+      {
+        "id": 10,
+        "input_type": "drawing_spiral",
+        "hand": "l",
+        "file_path": "uploads/drawing/2/spiral_l.png"
+      },
+      {
+        "id": 11,
+        "input_type": "drawing_spiral",
+        "hand": "r",
+        "file_path": "uploads/drawing/2/spiral_r.jpg"
+      }
+    ]
+  }
+}
+```
+
+**Error responses**:
+
+| Status | Body |
+|--------|------|
+| `400` | `{"error": "Both spiral_left and spiral_right files required"}` |
+| `400` | `{"error": "Invalid file type for spiral_left. Only PNG/JPG allowed"}` |
+| `400` | `{"error": "Test is not a drawing test"}` |
+| `401` | `{"error": "..."}` |
+| `403` | `{"error": "Forbidden"}` |
+| `404` | `{"error": "Test not found"}` |
+
+---
+
+### `POST /api/tests/<test_id>/voice`
+
+Upload a voice recording for a voice test.
+
+**Auth required**: Yes (JWT — Mobile App)
+
+**Content-Type**: `multipart/form-data`
+
+| Field | Type | Required | Notes |
+|-------|------|----------|-------|
+| `audio` | file | Yes | Audio file (WAV, MP3, or M4A) |
+
+**Example response** `200`:
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": 20,
+    "input_type": "voice_recording",
+    "file_path": "uploads/voice/3/recording.wav"
+  }
+}
+```
+
+**Error responses**:
+
+| Status | Body |
+|--------|------|
+| `400` | `{"error": "No audio file provided"}` |
+| `400` | `{"error": "Invalid file type. Only WAV/MP3/M4A allowed"}` |
+| `400` | `{"error": "Test is not a voice test"}` |
+| `401` | `{"error": "..."}` |
+| `403` | `{"error": "Forbidden"}` |
+| `404` | `{"error": "Test not found"}` |
+
+---
+
+### `POST /api/tests/<test_id>/complete`
+
+Mark a test as completed. The server validates that all required subtests have been uploaded, then runs the ML model to produce a score.
+
+**Auth required**: JWT (Mobile App) **or** `X-Device-API-Key` (ESP32)
+
+**Request body**: None
+
+**Validation**:
+
+- `tremor`: Checks that a `{test_id}_{step}_{hand}.txt` file exists for every step enabled (`true`) in `config`, for both `l` and `r` hands.
+- `drawing`: Requires exactly 2 uploaded inputs.
+- `voice`: Requires exactly 1 uploaded input.
+
+**Example response** `200`:
+
+```json
+{
+  "success": true,
+  "data": {
+    "message": "Test completed",
+    "status": "completed",
+    "ml_score": 0.72,
+    "uploaded_count": 4,
+    "expected_count": 4,
+    "missing": [],
+    "group_completed": false,
+    "group_overall_score": null
+  }
+}
+```
+
+**Example response** `200` — last test in the group to finish:
+
+```json
+{
+  "success": true,
+  "data": {
+    "message": "Test completed",
+    "status": "completed",
+    "ml_score": 0.55,
+    "uploaded_count": 1,
+    "expected_count": 1,
+    "missing": [],
+    "group_completed": true,
+    "group_overall_score": 0.68
+  }
+}
+```
+
+**Example error response** `400` (missing uploads):
+
+```json
+{
+  "error": "Missing required subtest uploads",
+  "missing": ["1_l", "1_r"],
+  "expected_count": 4,
+  "uploaded_count": 2
+}
+```
+
+**Error responses**:
+
+| Status | Body |
+|--------|------|
+| `400` | `{"error": "Test is already completed"}` |
+| `400` | `{"error": "Test has no uploads yet"}` — status is still `"pending"` |
+| `400` | `{"error": "Missing required subtest uploads", "missing": [...], ...}` |
+| `401` | `{"error": "..."}` |
+| `403` | `{"error": "Forbidden"}` |
+| `404` | `{"error": "Test not found"}` |
+
+---
+
+## ESP32 Device Pairing Routes `/api/esp32-devices`
+
+> **Client**: Mobile App
+
+These routes let the mobile app manage which ESP32 devices are linked to the user's account.
+
+---
+
+### `POST /api/esp32-devices/pair`
+
+Pair an ESP32 device to the current user. The `device_id` is printed on a sticker on the device and entered by the user in the app.
+
+**Auth required**: Yes (JWT)
+
+**Request body**:
+
+| Field | Type | Required | Notes |
+|-------|------|----------|-------|
+| `device_id` | string | Yes | Format `ESP32-XXXXXX` (6 hex chars), case-insensitive |
+| `name` | string | No | Friendly name; defaults to `device_id` if omitted |
+
+**Example request**:
+
+```json
+{
+  "device_id": "ESP32-AABBCC",
+  "name": "My Wrist Sensor"
+}
+```
+
+**Example response** `200` (newly paired):
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": 1,
+    "device_id": "ESP32-AABBCC",
+    "name": "My Wrist Sensor",
+    "is_connected": false,
+    "created_at": "2026-03-15T10:00:00"
+  }
+}
+```
+
+**Example response** `200` (already paired to this user):
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": 1,
+    "device_id": "ESP32-AABBCC",
+    "name": "My Wrist Sensor",
+    "is_connected": true,
+    "created_at": "2026-03-15T10:00:00"
+  },
+  "message": "Device is already paired to your account"
+}
+```
+
+**Error responses**:
+
+| Status | Body |
+|--------|------|
+| `400` | `{"error": "device_id is required"}` |
+| `401` | `{"error": "..."}` |
+| `404` | `{"error": "Device not found. Check the device ID and try again"}` |
+| `409` | `{"error": "Device is already paired to another user"}` |
+
+---
+
+### `GET /api/esp32-devices`
+
+List all ESP32 devices currently paired to the authenticated user.
+
+**Auth required**: Yes (JWT)
+
+**Example response** `200`:
+
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": 1,
+      "device_id": "ESP32-AABBCC",
+      "name": "My Wrist Sensor",
+      "is_connected": true,
+      "last_seen_at": "2026-03-15T10:05:00",
+      "created_at": "2026-03-15T10:00:00"
+    },
+    {
+      "id": 2,
+      "device_id": "ESP32-112233",
+      "name": "Spare Device",
+      "is_connected": false,
+      "last_seen_at": "2026-03-14T09:00:00",
+      "created_at": "2026-03-14T08:50:00"
+    }
+  ]
+}
+```
+
+**Error responses**:
+
+| Status | Body |
+|--------|------|
+| `401` | `{"error": "..."}` |
+
+---
+
+### `DELETE /api/esp32-devices/<id>`
+
+Unpair an ESP32 device from the current user. The device's `user_id` and `name` are cleared; it can be re-paired by any user.
+
+**Auth required**: Yes (JWT)
+
+**URL parameters**:
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `id` | integer | The database `id` from the list endpoint (not the `device_id` string) |
+
+**Example request**:
+
+```
+DELETE /api/esp32-devices/1
+```
+
+**Example response** `200`:
+
+```json
+{
+  "success": true,
+  "message": "Device unpaired successfully"
+}
+```
+
+**Error responses**:
+
+| Status | Body |
+|--------|------|
+| `401` | `{"error": "..."}` |
+| `404` | `{"error": "Device not found"}` — not found or belongs to a different user |
+
+---
+
+## ESP32 Device Routes `/api/esp32`
+
+> **Client**: ESP32 Device only
+
+These routes are called directly by the ESP32 firmware. The mobile app never calls these.
+
+---
+
+### `POST /api/esp32/register`
+
+One-time registration of an ESP32 device at the factory (or on first power-up). Verifies the factory HMAC key, creates the device record, and returns a permanent production API key.
+
+**Auth required**: Factory key (`X-Device-API-Key: fk_...`)
+
+**Headers**:
+
+| Header | Value |
+|--------|-------|
+| `X-Device-API-Key` | `fk_<32-hex-chars>` — HMAC-SHA256 derived from `device_id` and `FACTORY_SECRET` |
+
+**Request body**:
+
+| Field | Type | Required | Constraints |
+|-------|------|----------|-------------|
+| `device_id` | string | Yes | Format `ESP32-XXXXXX` (uppercase 6 hex chars) |
+
+**Example request**:
+
+```json
+{
+  "device_id": "ESP32-AABBCC"
+}
+```
+
+**Example response** `200` (first registration):
+
+```json
+{
+  "success": true,
+  "data": {
+    "device_id": "ESP32-AABBCC",
+    "api_key": "sk_live_Kx9mN2pQrT..."
+  }
+}
+```
+
+**Example response** `200` (re-registration, key unchanged):
+
+```json
+{
+  "success": true,
+  "data": {
+    "device_id": "ESP32-AABBCC",
+    "api_key": "sk_live_Kx9mN2pQrT..."
+  }
+}
+```
+
+**Error responses**:
+
+| Status | Body |
+|--------|------|
+| `400` | `{"error": "device_id is required"}` |
+| `400` | `{"error": "Invalid device_id format. Expected: ESP32-XXXXXX"}` |
+| `401` | `{"error": "Invalid factory key"}` |
+
+---
+
+### `GET /api/esp32/stream`
+
+Long-lived SSE (Server-Sent Events) connection. The ESP32 connects once and keeps this open to receive real-time commands. When the mobile app creates a tremor test with `device_source = "esp32"`, the server pushes a `test_started` event through this stream.
+
+**Auth required**: Production key (`X-Device-API-Key: sk_live_...`)
+
+**Device must be paired** to a user account before connecting.
+
+**Response**: `text/event-stream` — connection stays open
+
+**SSE events**:
+
+| Event | When | Data |
+|-------|------|------|
+| `connected` | Immediately on connect | `{"device_id": "ESP32-AABBCC"}` |
+| `test_started` | When mobile app starts a tremor test | `{"test_id": 7, "test_type": "tremor", "config": {"0": true, "1": true}}` |
+| `heartbeat` | Every 30 seconds (keep-alive) | `{"timestamp": "2026-03-15T10:00:00"}` |
+
+**Example SSE stream**:
+
+```
+event: connected
+data: {"device_id": "ESP32-AABBCC"}
+
+event: heartbeat
+data: {"timestamp": "2026-03-15T10:00:30"}
+
+event: test_started
+data: {"test_id": 7, "test_type": "tremor", "config": {"0": true, "1": true, "5": true}}
+
+event: heartbeat
+data: {"timestamp": "2026-03-15T10:01:00"}
+```
+
+**Notes**:
+- The device's `is_connected` is set to `true` on connect and `false` on disconnect.
+- Only one active SSE connection per user is tracked at a time.
+- Response headers include `Cache-Control: no-cache`, `X-Accel-Buffering: no` for proxy/Cloudflare compatibility.
+
+**Error responses**:
+
+| Status | Body |
+|--------|------|
+| `401` | `{"error": "..."}` — invalid or missing API key |
+| `403` | `{"error": "..."}` — device not paired to any user |
+
+---
+
+### `POST /api/esp32/heartbeat`
+
+Periodic keep-alive ping. Updates `is_connected = true` and `last_seen_at` timestamp. Should be sent regularly even when there is no active SSE connection.
+
+**Auth required**: Production key (`X-Device-API-Key: sk_live_...`)
+
+**Request body**: None
+
+**Example response** `200`:
+
+```json
+{
+  "success": true,
+  "message": "Heartbeat received"
+}
+```
+
+**Error responses**:
+
+| Status | Body |
+|--------|------|
+| `401` | `{"error": "..."}` — invalid or missing API key |
+| `403` | `{"error": "..."}` — device not paired to any user |
+
+---
+
+## Health Check
 
 ### `GET /health`
 
-- **Description**: Check if the service is running
-- **Response**:
-  - Success (200): `{"status": "healthy"}`
+Simple liveness check.
 
-## Error Handlers
+**Auth required**: No
 
-- **400**: Returns `{"success": false, "error": "..."}`
-- **401**: Returns `{"error": "..."}`
-- **403**: Returns `{"error": "Forbidden"}` or `{"error": "..."}`
-- **404**: Returns `{"error": "Not found"}`
-- **500**: Returns `{"error": "Internal server error"}`
+**Example response** `200`:
 
-## Configuration
+```json
+{
+  "status": "healthy"
+}
+```
 
-- JWT access tokens expire after 15 minutes (900 seconds)
-- JWT refresh tokens expire after 30 days
-- Maximum file upload size: 16MB
-- Allowed file extensions:
-  - Audio: mp3, wav, m4a
-  - Images: png, jpg, jpeg, gif
-  - Text: txt, csv, json
-- Test data retention: 90 days (auto-delete)
+---
 
-## Tremor Test Configuration
+## Authentication Summary
 
-Available tremor test steps (controlled via `config`):
+| Route | Client | Auth type | Header |
+|-------|--------|-----------|--------|
+| `POST /api/auth/register` | Mobile | None | — |
+| `POST /api/auth/login` | Mobile | None | — |
+| `POST /api/auth/refresh` | Mobile | JWT | `Authorization: Bearer <token>` |
+| `POST /api/auth/logout` | Mobile | JWT | `Authorization: Bearer <token>` |
+| `POST /api/auth/logout-all` | Mobile | JWT | `Authorization: Bearer <token>` |
+| `GET /api/auth/sessions` | Mobile | JWT | `Authorization: Bearer <token>` |
+| `GET /api/user/` | Mobile | JWT | `Authorization: Bearer <token>` |
+| `PATCH /api/user/` | Mobile | JWT | `Authorization: Bearer <token>` |
+| `POST /api/user/reset` | Mobile | JWT | `Authorization: Bearer <token>` |
+| `DELETE /api/user/` | Mobile | JWT | `Authorization: Bearer <token>` |
+| `GET /api/questionnaire/` | Mobile | JWT | `Authorization: Bearer <token>` |
+| `PATCH /api/questionnaire/` | Mobile | JWT | `Authorization: Bearer <token>` |
+| `POST /api/groups` | Mobile | JWT | `Authorization: Bearer <token>` |
+| `GET /api/groups` | Mobile | JWT | `Authorization: Bearer <token>` |
+| `GET /api/groups/<id>` | Mobile | JWT | `Authorization: Bearer <token>` |
+| `POST /api/tests` | Mobile | JWT | `Authorization: Bearer <token>` |
+| `GET /api/tests` | Mobile | JWT | `Authorization: Bearer <token>` |
+| `GET /api/tests/<id>` | Mobile | JWT | `Authorization: Bearer <token>` |
+| `POST /api/tests/<id>/tremor` | Mobile **or** ESP32 | JWT or Production key | `Authorization: Bearer <token>` or `X-Device-API-Key: sk_live_...` |
+| `POST /api/tests/<id>/drawings` | Mobile | JWT | `Authorization: Bearer <token>` |
+| `POST /api/tests/<id>/voice` | Mobile | JWT | `Authorization: Bearer <token>` |
+| `POST /api/tests/<id>/complete` | Mobile **or** ESP32 | JWT or Production key | `Authorization: Bearer <token>` or `X-Device-API-Key: sk_live_...` |
+| `POST /api/esp32-devices/pair` | Mobile | JWT | `Authorization: Bearer <token>` |
+| `GET /api/esp32-devices` | Mobile | JWT | `Authorization: Bearer <token>` |
+| `DELETE /api/esp32-devices/<id>` | Mobile | JWT | `Authorization: Bearer <token>` |
+| `POST /api/esp32/register` | ESP32 | Factory key | `X-Device-API-Key: fk_...` |
+| `GET /api/esp32/stream` | ESP32 | Production key | `X-Device-API-Key: sk_live_...` |
+| `POST /api/esp32/heartbeat` | ESP32 | Production key | `X-Device-API-Key: sk_live_...` |
+| `GET /health` | Any | None | — |
 
-| Step | Name | Default |
-|------|------|---------|
-| 0 | Resting | true |
-| 1 | Resting with serial sevens | true |
-| 2 | Lift and extend arms | true |
-| 3 | Arms remain lifted | true |
-| 4 | Hold one kilogram weight | true |
-| 5 | Point index finger | true |
-| 6 | Drink from glass | true |
-| 7 | Cross and extend arms | true |
-| 8 | Touch index fingers together | true |
-| 9 | Tap nose with index finger | true |
-| 10 | Entrainment foot stomping | true |
+---
+
+## Global Error Responses
+
+| Status | Meaning | Body |
+|--------|---------|------|
+| `400` | Bad request / validation error | `{"error": "..."}` or `{"success": false, "error": "..."}` |
+| `401` | Unauthenticated | `{"error": "..."}` |
+| `403` | Forbidden (wrong user) | `{"error": "Forbidden"}` |
+| `404` | Not found | `{"error": "..."}` |
+| `409` | Conflict | `{"error": "..."}` |
+| `500` | Internal server error | `{"error": "Internal server error"}` or `{"success": false, "error": "..."}` |
+
+---
+
+## Token Lifetimes
+
+| Token | Expiry |
+|-------|--------|
+| Access token (JWT) | 15 minutes (900 seconds) |
+| Refresh token | 30 days |
+
+---
+
+## File Upload Limits
+
+| Test type | Accepted formats | Max size |
+|-----------|-----------------|----------|
+| Tremor (file upload) | `.txt` | 16 MB |
+| Drawing | `.png`, `.jpg`, `.jpeg` | 16 MB per file |
+| Voice | `.wav`, `.mp3`, `.m4a` | 16 MB |
+
+Test input files are retained for **90 days** then auto-deleted.
+
+---
+
+## Tremor Test Subtests
+
+Subtests are controlled via the `config` object when creating a tremor test. Each enabled step (`true`) requires two uploads — left hand (`l`) and right hand (`r`).
+
+| Step key | Description |
+|----------|-------------|
+| `"0"` | Resting |
+| `"1"` | Resting with serial sevens |
+| `"2"` | Lift and extend arms |
+| `"3"` | Arms remain lifted |
+| `"4"` | Hold one kilogram weight |
+| `"5"` | Point index finger |
+| `"6"` | Drink from glass |
+| `"7"` | Cross and extend arms |
+| `"8"` | Touch index fingers together |
+| `"9"` | Tap nose with index finger |
+| `"10"` | Entrainment foot stomping |
+
+Steps not included in `config` default to disabled. The complete endpoint rejects the request if any enabled step is missing its uploads.
+
+---
 
 ## ESP32 Device ID Format
 
-- Device IDs follow format: `ESP32-XXXXXX` (6 hex characters)
-- Derived from ESP32 MAC address (last 6 chars)
-- Example: MAC `AA:BB:CC:DD:EE:FF` → Device ID `ESP32-DDEEFF`
-- Printed on sticker on ESP32 device
-- User types this ID in mobile app to pair device
+- Format: `ESP32-XXXXXX` where `XXXXXX` is 6 uppercase hex characters
+- Derived from the last 6 characters of the ESP32 MAC address
+- Example: MAC `AA:BB:CC:DD:EE:FF` → device ID `ESP32-DDEEFF`
+- Printed on a sticker on the physical device
+- The user types this into the mobile app to pair
+
+---
 
 ## ESP32 Factory Key Generation
 
-Factory keys are generated using HMAC-SHA256 during manufacturing:
+Factory keys are generated during manufacturing using HMAC-SHA256 and a shared secret:
 
 ```
 factory_key = "fk_" + HMAC-SHA256(device_id, FACTORY_SECRET)[:32]
 ```
 
-### Manufacturing Script Usage
+**Usage**:
 
 ```bash
-# Set the factory secret (same as server)
 export FACTORY_SECRET="your_secret_here"
-
-# Generate factory key from MAC address
 python scripts/generate_factory_key.py AA:BB:CC:DD:EE:FF
-
-# Output:
-# device_id: ESP32-DDEEFF
+# device_id:   ESP32-DDEEFF
 # factory_key: fk_a1b2c3d4e5f6...
 ```
 
-### Environment Variables
+**Environment variables**:
 
 | Variable | Description | Required |
 |----------|-------------|----------|
 | `FACTORY_SECRET` | Shared secret for HMAC factory key generation | Yes (production) |
-
-## ESP32 vs Mobile
-
-- ESP32 handles tremor test (sensor data)
-- Mobile handles drawing + voice tests (user input)
-- Different authentication (API key vs JWT)
-- Separate route namespaces for clarity
-
-## Authentication Summary
-
-| Route | Auth Type | Header |
-|-------|-----------|--------|
-| `/api/auth/*` | None | - |
-| `/api/tests` | JWT | `Authorization: Bearer <token>` |
-| `/api/tests/<id>/tremor` | JWT or ESP32 | `Authorization: Bearer <token>` or `X-Device-API-Key: <key>` |
-| `/api/tests/<id>/complete` | JWT or ESP32 | `Authorization: Bearer <token>` or `X-Device-API-Key: <key>` |
-| `/api/tests/<id>/drawings` | JWT | `Authorization: Bearer <token>` |
-| `/api/tests/<id>/voice` | JWT | `Authorization: Bearer <token>` |
-| `/api/esp32-devices/*` | JWT | `Authorization: Bearer <token>` |
-| `/api/esp32/register` | Factory Key (HMAC) | `X-Device-API-Key: fk_...` |
-| `/api/esp32/stream` | Production Key | `X-Device-API-Key: sk_live_...` |
-| `/api/esp32/heartbeat` | Production Key | `X-Device-API-Key: sk_live_...` |
-| `/api/user/*` | JWT | `Authorization: Bearer <token>` |
-| `/api/questionnaire/*` | JWT | `Authorization: Bearer <token>` |
-| `/health` | None | - |
