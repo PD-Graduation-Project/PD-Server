@@ -22,6 +22,7 @@ class CreateTestSchema(Schema):
     test_type = fields.String(
         required=True, validate=validate.OneOf(["tremor", "drawing", "voice"])
     )
+    group_id = fields.Integer(required=True)
     device = fields.String(required=False, validate=validate.OneOf(["mobile", "esp32"]))
 
     config = fields.Nested(
@@ -56,6 +57,7 @@ class TestInputSchema(Schema):
 class TestSessionSchema(Schema):
     id = fields.Integer(dump_only=True)
     user_id = fields.Integer(dump_only=True)
+    group_id = fields.Integer(dump_only=True, allow_none=True)
     test_type = fields.String(dump_only=True)
     status = fields.String(dump_only=True)
     device_source = fields.String(dump_only=True)
@@ -74,6 +76,7 @@ class TestListQuerySchema(Schema):
         required=False,
         validate=validate.OneOf(["pending", "in_progress", "completed", "failed"]),
     )
+    group_id = fields.Integer(required=False)
     page = fields.Integer(
         required=False, validate=validate.Range(min=1), load_default=1
     )

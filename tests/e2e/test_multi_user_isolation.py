@@ -164,10 +164,14 @@ class TestMultiUserIsolation:
             "Content-Type": "application/json",
         }
 
-        # ===== User A Creates Test =====
+        # ===== User A Creates Group + Test =====
+        group_response = e2e_client.post("/api/groups", headers=headers_a)
+        assert group_response.status_code == 201
+        group_id = group_response.get_json()["data"]["id"]
+
         create_response = e2e_client.post(
             "/api/tests",
-            json={"test_type": "tremor", "config": {"0": True}},
+            json={"test_type": "tremor", "config": {"0": True}, "group_id": group_id},
             headers=headers_a,
         )
         assert create_response.status_code == 201

@@ -57,10 +57,10 @@ def multiple_sessions_fixture(app, test_user, clean_test_data):
 
 
 class TestCreateTest:
-    def test_create_tremor_test(self, client, auth_headers):
+    def test_create_tremor_test(self, client, auth_headers, test_group):
         response = client.post(
             "/api/tests",
-            json={"test_type": "tremor"},
+            json={"test_type": "tremor", "group_id": test_group},
             headers=auth_headers,
         )
         assert response.status_code == 201
@@ -70,10 +70,10 @@ class TestCreateTest:
         assert data["data"]["status"] == "pending"
         assert data["data"]["device_source"] == "esp32"
 
-    def test_create_drawing_test(self, client, auth_headers):
+    def test_create_drawing_test(self, client, auth_headers, test_group):
         response = client.post(
             "/api/tests",
-            json={"test_type": "drawing"},
+            json={"test_type": "drawing", "group_id": test_group},
             headers=auth_headers,
         )
         assert response.status_code == 201
@@ -82,10 +82,10 @@ class TestCreateTest:
         assert data["data"]["test_type"] == "drawing"
         assert data["data"]["device_source"] == "mobile"
 
-    def test_create_voice_test(self, client, auth_headers):
+    def test_create_voice_test(self, client, auth_headers, test_group):
         response = client.post(
             "/api/tests",
-            json={"test_type": "voice"},
+            json={"test_type": "voice", "group_id": test_group},
             headers=auth_headers,
         )
         assert response.status_code == 201
@@ -94,11 +94,12 @@ class TestCreateTest:
         assert data["data"]["test_type"] == "voice"
         assert data["data"]["device_source"] == "mobile"
 
-    def test_create_test_with_config(self, client, auth_headers):
+    def test_create_test_with_config(self, client, auth_headers, test_group):
         response = client.post(
             "/api/tests",
             json={
                 "test_type": "tremor",
+                "group_id": test_group,
                 "config": {"0": True, "2": False, "10": True},
             },
             headers=auth_headers,
@@ -107,21 +108,22 @@ class TestCreateTest:
         data = response.get_json()
         assert data["success"] is True
 
-    def test_create_test_empty_config(self, client, auth_headers):
+    def test_create_test_empty_config(self, client, auth_headers, test_group):
         response = client.post(
             "/api/tests",
-            json={"test_type": "drawing"},
+            json={"test_type": "drawing", "group_id": test_group},
             headers=auth_headers,
         )
         assert response.status_code == 201
         data = response.get_json()
         assert data["success"] is True
 
-    def test_create_test_with_device_override(self, client, auth_headers):
+    def test_create_test_with_device_override(self, client, auth_headers, test_group):
         response = client.post(
             "/api/tests",
             json={
                 "test_type": "tremor",
+                "group_id": test_group,
                 "device": "esp32",
                 "config": {"0": True},
             },
@@ -132,11 +134,12 @@ class TestCreateTest:
         assert data["success"] is True
         assert data["data"]["device_source"] == "esp32"
 
-    def test_create_test_mobile_override(self, client, auth_headers):
+    def test_create_test_mobile_override(self, client, auth_headers, test_group):
         response = client.post(
             "/api/tests",
             json={
                 "test_type": "tremor",
+                "group_id": test_group,
                 "device": "mobile",
             },
             headers=auth_headers,
@@ -146,21 +149,22 @@ class TestCreateTest:
         assert data["success"] is True
         assert data["data"]["device_source"] == "mobile"
 
-    def test_create_test_invalid_device(self, client, auth_headers):
+    def test_create_test_invalid_device(self, client, auth_headers, test_group):
         response = client.post(
             "/api/tests",
             json={
                 "test_type": "tremor",
+                "group_id": test_group,
                 "device": "invalid",
             },
             headers=auth_headers,
         )
         assert response.status_code == 400
 
-    def test_create_test_invalid_type(self, client, auth_headers):
+    def test_create_test_invalid_type(self, client, auth_headers, test_group):
         response = client.post(
             "/api/tests",
-            json={"test_type": "invalid"},
+            json={"test_type": "invalid", "group_id": test_group},
             headers=auth_headers,
         )
         assert response.status_code == 400
@@ -168,7 +172,7 @@ class TestCreateTest:
     def test_create_test_unauthorized(self, client):
         response = client.post(
             "/api/tests",
-            json={"test_type": "tremor"},
+            json={"test_type": "tremor", "group_id": 1},
         )
         assert response.status_code == 401
 

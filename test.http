@@ -2,7 +2,7 @@
 
 @baseUrl = {{tunnel}}
 @local = http://localhost:6969
-@tunnel = https://ripe-pillows-attend.loca.lt/
+@tunnel = https://strong-ads-roll.loca.lt/
 
 
 ### login
@@ -28,7 +28,8 @@ Authorization: Bearer {{login.response.body.$.access_token}}
 
 {
   "config": {
-    "0": true
+    "0": true,
+    "1": true
   },
   "device": "esp32",
   "test_type": "tremor"

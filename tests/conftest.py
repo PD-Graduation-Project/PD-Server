@@ -4,7 +4,7 @@ import pytest
 
 from app import create_app  # Adjust import based on your app structure
 from models.database import db
-from models.test_models import ESP32Device, TestInput, TestSession
+from models.test_models import ESP32Device, TestGroup, TestInput, TestSession
 from models.user import RefreshToken, User
 
 
@@ -57,6 +57,7 @@ def db_session(app):
     with app.app_context():
         TestInput.query.delete()
         TestSession.query.delete()
+        TestGroup.query.delete()
         ESP32Device.query.delete()
         RefreshToken.query.delete()
         User.query.delete()
@@ -67,6 +68,7 @@ def db_session(app):
         db.session.rollback()
         TestInput.query.delete()
         TestSession.query.delete()
+        TestGroup.query.delete()
         ESP32Device.query.delete()
         RefreshToken.query.delete()
         User.query.delete()
@@ -248,6 +250,17 @@ def multiple_sessions(app, test_user, db_session):
 
         db_session.commit()
         return tokens
+
+
+@pytest.fixture
+def test_group(client, auth_headers):
+    """
+    Create a test group via the API and return the group_id.
+    Depends on auth_headers (which depends on test_user + db_session).
+    """
+    response = client.post("/api/groups", headers=auth_headers)
+    assert response.status_code == 201, f"Failed to create group: {response.get_json()}"
+    return response.get_json()["data"]["id"]
 
 
 @pytest.fixture

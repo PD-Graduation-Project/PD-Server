@@ -5,7 +5,7 @@ from flask import Blueprint, g, jsonify, request
 from middleware.authenticate import authenticate
 from middleware.authenticate_esp32 import authenticate_jwt_or_esp32
 from models.database import db
-from models.test_models import TestInput, TestSession
+from models.test_models import TestGroup, TestInput, TestSession
 from models.user import User
 from utils.storage import (
     generate_drawing_filename,
@@ -454,6 +454,32 @@ def complete_test(test_id):
     test_session.ml_score = ml_score
     db.session.commit()
 
+    # Check if all three tests in the group are now completed
+    group_overall_score = None
+    if test_session.group_id:
+        group = db.session.get(TestGroup, test_session.group_id)
+        if group and group.status != "completed":
+            group_tests = TestSession.query.filter_by(group_id=group.id).all()
+            type_to_score = {t.test_type: t.ml_score for t in group_tests}
+            required = {"tremor", "drawing", "voice"}
+
+            all_done = required == set(type_to_score.keys()) and all(
+                t.status == "completed" for t in group_tests
+            )
+
+            if all_done:
+                from ml.overall_model import predict_overall
+
+                group_overall_score = predict_overall(
+                    tremor_score=type_to_score["tremor"],
+                    drawing_score=type_to_score["drawing"],
+                    voice_score=type_to_score["voice"],
+                )
+                group.overall_score = group_overall_score
+                group.status = "completed"
+                group.completed_at = datetime.now(timezone.utc)
+                db.session.commit()
+
     return (
         jsonify(
             {
@@ -465,6 +491,8 @@ def complete_test(test_id):
                     "uploaded_count": uploaded_count,
                     "expected_count": expected_count,
                     "missing": missing,
+                    "group_completed": group_overall_score is not None,
+                    "group_overall_score": group_overall_score,
                 },
             }
         ),

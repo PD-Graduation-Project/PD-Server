@@ -45,7 +45,7 @@ class TestCreateTestOfflineDevice:
     """Integration tests for POST /api/tests when ESP32 device is offline."""
 
     def test_create_tremor_test_succeeds_when_device_offline(
-        self, client, auth_headers, monkeypatch
+        self, client, auth_headers, test_group, monkeypatch
     ):
         """POST /api/tests returns 201 even when device is offline and event is not sent."""
         monkeypatch.setattr(
@@ -54,7 +54,7 @@ class TestCreateTestOfflineDevice:
 
         response = client.post(
             "/api/tests",
-            json={"test_type": "tremor"},
+            json={"test_type": "tremor", "group_id": test_group},
             headers=auth_headers,
         )
 
@@ -65,7 +65,7 @@ class TestCreateTestOfflineDevice:
         assert data["data"]["status"] == "pending"
 
     def test_create_tremor_test_persists_even_when_event_not_sent(
-        self, app, client, auth_headers, test_user, monkeypatch
+        self, app, client, auth_headers, test_user, test_group, monkeypatch
     ):
         """Test session is saved to DB regardless of whether the SSE event was delivered."""
         monkeypatch.setattr(
@@ -74,7 +74,7 @@ class TestCreateTestOfflineDevice:
 
         response = client.post(
             "/api/tests",
-            json={"test_type": "tremor"},
+            json={"test_type": "tremor", "group_id": test_group},
             headers=auth_headers,
         )
 
@@ -88,7 +88,7 @@ class TestCreateTestOfflineDevice:
             assert session.status == "pending"
 
     def test_send_event_is_called_with_correct_args(
-        self, client, auth_headers, test_user, monkeypatch
+        self, client, auth_headers, test_user, test_group, monkeypatch
     ):
         """send_event is called with correct args when a tremor test is created."""
         calls = []
@@ -101,7 +101,7 @@ class TestCreateTestOfflineDevice:
 
         response = client.post(
             "/api/tests",
-            json={"test_type": "tremor"},
+            json={"test_type": "tremor", "group_id": test_group},
             headers=auth_headers,
         )
 
@@ -125,17 +125,21 @@ class TestCreateTestOfflineDevice:
         monkeypatch.setattr(cm_module.connection_manager, "send_event", fake_send_event)
 
         for test_type in ("drawing", "voice"):
+            # Each test_type needs its own group (can't reuse same group for both
+            # since each type can only appear once per group)
+            group_resp = client.post("/api/groups", headers=auth_headers)
+            gid = group_resp.get_json()["data"]["id"]
             calls.clear()
             response = client.post(
                 "/api/tests",
-                json={"test_type": test_type},
+                json={"test_type": test_type, "group_id": gid},
                 headers=auth_headers,
             )
             assert response.status_code == 201
             assert len(calls) == 0, f"send_event should not be called for {test_type}"
 
     def test_create_tremor_test_succeeds_when_event_send_raises(
-        self, client, auth_headers, monkeypatch
+        self, client, auth_headers, test_group, monkeypatch
     ):
         """POST /api/tests returns 201 even if send_event raises an unexpected exception."""
 
@@ -149,7 +153,7 @@ class TestCreateTestOfflineDevice:
         try:
             response = client.post(
                 "/api/tests",
-                json={"test_type": "tremor"},
+                json={"test_type": "tremor", "group_id": test_group},
                 headers=auth_headers,
             )
             assert response.status_code == 201
@@ -160,7 +164,7 @@ class TestCreateTestOfflineDevice:
             )
 
     def test_create_tremor_test_succeeds_when_device_online(
-        self, client, auth_headers, test_user, monkeypatch
+        self, client, auth_headers, test_user, test_group, monkeypatch
     ):
         """POST /api/tests returns 201 and send_event returns True when device is online."""
         calls = []
@@ -173,7 +177,7 @@ class TestCreateTestOfflineDevice:
 
         response = client.post(
             "/api/tests",
-            json={"test_type": "tremor"},
+            json={"test_type": "tremor", "group_id": test_group},
             headers=auth_headers,
         )
 

@@ -6,7 +6,7 @@ from sqlalchemy.orm import selectinload
 
 from middleware.authenticate import authenticate
 from models.database import db
-from models.test_models import TestSession
+from models.test_models import TestGroup, TestSession
 from models.user import User
 from schemas.test_schema import CreateTestSchema, TestListQuerySchema, TestSessionSchema
 from utils.esp32_connection_manager import connection_manager
@@ -34,9 +34,30 @@ def create_test():
     if not current_user:
         return jsonify({"error": "User not found"}), 404
 
+    # Validate group ownership
+    group = db.session.get(TestGroup, data["group_id"])
+    if not group:
+        return jsonify({"error": "Group not found"}), 404
+    if group.user_id != g.user_id:
+        return jsonify({"error": "Forbidden"}), 403
+    if group.status == "completed":
+        return jsonify({"error": "Group is already completed"}), 409
+
     test_type = data["test_type"]
     config = data.get("config", {})
     device = data.get("device")
+
+    # Prevent duplicate test types within the same group
+    existing_types = {t.test_type for t in group.tests}  # type: ignore[union-attr]
+    if test_type in existing_types:
+        return (
+            jsonify(
+                {
+                    "error": f"A {test_type} test already exists in this group",
+                }
+            ),
+            409,
+        )
 
     if device:
         device_source = device
@@ -45,6 +66,7 @@ def create_test():
 
     test_session = TestSession(
         user_id=current_user.id,
+        group_id=group.id,
         test_type=test_type,
         status="pending",
         device_source=device_source,
@@ -52,6 +74,11 @@ def create_test():
     )
 
     db.session.add(test_session)
+
+    # Advance group to in_progress on first test added
+    if group.status == "pending":
+        group.status = "in_progress"
+
     db.session.commit()
 
     # If tremor test with ESP32, send SSE event to paired device
@@ -115,6 +142,9 @@ def list_tests():
 
     if params.get("status"):
         query = query.filter_by(status=params["status"])
+
+    if params.get("group_id"):
+        query = query.filter_by(group_id=params["group_id"])
 
     total = query.count()
     page = params.get("page", 1)

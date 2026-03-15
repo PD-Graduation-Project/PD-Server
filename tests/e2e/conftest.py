@@ -466,17 +466,29 @@ class MobileAppSimulator:
             return True, response.get_json()
         return False, None
 
+    def create_group(self) -> Tuple[bool, Optional[int]]:
+        """Create a new test group and return the group_id."""
+        response = self.client.post("/api/groups", headers=self.auth_headers)
+        if response.status_code == 201:
+            return True, response.get_json()["data"]["id"]
+        return False, None
+
     def create_test(
-        self, test_type: str, config: Dict = None
+        self, test_type: str, config: Dict = None, group_id: int = None
     ) -> Tuple[bool, Optional[Dict]]:
-        """Create a new test session."""
-        body: Dict = {"test_type": test_type}
+        """Create a new test session. Auto-creates a group if group_id not provided."""
+        if group_id is None:
+            ok, group_id = self.create_group()
+            if not ok:
+                return False, None
+
+        body: Dict = {"test_type": test_type, "group_id": group_id}
         if config:
             body["config"] = config  # type: ignore[assignment]
 
         response = self.client.post("/api/tests", json=body, headers=self.auth_headers)
 
-        if response.status_code == 200:
+        if response.status_code == 201:
             return True, response.get_json()["data"]
         return False, None
 

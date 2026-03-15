@@ -3,15 +3,58 @@ from datetime import datetime
 from models.database import db
 
 
+class TestGroup(db.Model):
+    """
+    Groups one tremor, one drawing, and one voice TestSession together
+    into a single assessment session. Created by the mobile app before
+    any individual tests are started.
+    """
+
+    __tablename__ = "test_groups"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+
+    # "pending" → "in_progress" (first test created) → "completed" (all 3 done)
+    status = db.Column(db.String(20), nullable=False, default="pending")
+
+    # Set once all three tests are completed, via predict_overall()
+    overall_score = db.Column(db.Float, nullable=True)
+
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    completed_at = db.Column(db.DateTime, nullable=True)
+
+    # Relationship back to the three child test sessions
+    tests = db.relationship(
+        "TestSession",
+        back_populates="group",
+        cascade="all, delete-orphan",
+    )
+
+    user = db.relationship("User", backref="test_groups")
+
+    __table_args__ = (
+        db.Index("idx_test_group_user_id", "user_id"),
+        db.Index("idx_test_group_user_status", "user_id", "status"),
+    )
+
+
 class TestSession(db.Model):
     __tablename__ = "test_sessions"
 
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
-    test_type = db.Column(db.String(20), nullable=False)  # tremor, speech, voice
+
+    # FK to the parent group — nullable so old rows and standalone tests still work
+    # at the DB level, but the API enforces it for new POSTs.
+    group_id = db.Column(
+        db.Integer, db.ForeignKey("test_groups.id"), nullable=True, index=True
+    )
+
+    test_type = db.Column(db.String(20), nullable=False)  # tremor, drawing, voice
     status = db.Column(
         db.String(20), nullable=False, default="pending"
-    )  # pending, running, finished
+    )  # pending, in_progress, completed
     device_source = db.Column(db.String(20), nullable=True)
     config = db.Column(db.JSON, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
@@ -19,6 +62,8 @@ class TestSession(db.Model):
     ml_score = db.Column(db.Float, nullable=True)
 
     user_id_fk = db.relationship("User", backref="test_sessions")
+
+    group = db.relationship("TestGroup", back_populates="tests")
 
     inputs = db.relationship(
         "TestInput",

@@ -49,12 +49,14 @@ class TestCompleteVoiceFlow:
             "Content-Type": "application/json",
         }
 
-        # ===== STEP 2: Create Voice Test =====
+        # ===== STEP 2: Create Group + Voice Test =====
+        group_response = e2e_client.post("/api/groups", headers=auth_headers)
+        assert group_response.status_code == 201
+        group_id = group_response.get_json()["data"]["id"]
+
         create_response = e2e_client.post(
             "/api/tests",
-            json={
-                "test_type": "voice",
-            },
+            json={"test_type": "voice", "group_id": group_id},
             headers=auth_headers,
         )
         assert create_response.status_code == 201
@@ -129,14 +131,20 @@ class TestCompleteVoiceFlow:
         assert login_response.status_code == 200
         tokens = login_response.get_json()
 
-        # Create test
+        voice_auth = {
+            "Authorization": f"Bearer {tokens['access_token']}",
+            "Content-Type": "application/json",
+        }
+
+        # Create group then test
+        group_response = e2e_client.post("/api/groups", headers=voice_auth)
+        assert group_response.status_code == 201
+        group_id = group_response.get_json()["data"]["id"]
+
         create_response = e2e_client.post(
             "/api/tests",
-            json={"test_type": "voice"},
-            headers={
-                "Authorization": f"Bearer {tokens['access_token']}",
-                "Content-Type": "application/json",
-            },
+            json={"test_type": "voice", "group_id": group_id},
+            headers=voice_auth,
         )
         assert create_response.status_code == 201
         test_id = create_response.get_json()["data"]["id"]

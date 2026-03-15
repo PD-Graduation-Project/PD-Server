@@ -45,10 +45,20 @@ class TestCompleteDrawingFlow:
 
         tokens = login_response.get_json()
 
-        # ===== STEP 2: Create Drawing Test =====
+        # ===== STEP 2: Create Group + Drawing Test =====
+        group_response = e2e_client.post(
+            "/api/groups",
+            headers={
+                "Authorization": f"Bearer {tokens['access_token']}",
+                "Content-Type": "application/json",
+            },
+        )
+        assert group_response.status_code == 201
+        group_id = group_response.get_json()["data"]["id"]
+
         create_response = e2e_client.post(
             "/api/tests",
-            json={"test_type": "drawing"},
+            json={"test_type": "drawing", "group_id": group_id},
             headers={
                 "Authorization": f"Bearer {tokens['access_token']}",
                 "Content-Type": "application/json",
@@ -138,14 +148,20 @@ class TestCompleteDrawingFlow:
         assert login_response.status_code == 200
         tokens = login_response.get_json()
 
-        # Create test
+        drawing_auth = {
+            "Authorization": f"Bearer {tokens['access_token']}",
+            "Content-Type": "application/json",
+        }
+
+        # Create group then test
+        group_response = e2e_client.post("/api/groups", headers=drawing_auth)
+        assert group_response.status_code == 201
+        group_id = group_response.get_json()["data"]["id"]
+
         create_response = e2e_client.post(
             "/api/tests",
-            json={"test_type": "drawing"},
-            headers={
-                "Authorization": f"Bearer {tokens['access_token']}",
-                "Content-Type": "application/json",
-            },
+            json={"test_type": "drawing", "group_id": group_id},
+            headers=drawing_auth,
         )
         assert create_response.status_code == 201
         test_id = create_response.get_json()["data"]["id"]
@@ -195,14 +211,20 @@ class TestCompleteDrawingFlow:
         assert login_response.status_code == 200
         tokens = login_response.get_json()
 
-        # Create test
+        missing_auth = {
+            "Authorization": f"Bearer {tokens['access_token']}",
+            "Content-Type": "application/json",
+        }
+
+        # Create group then test
+        group_response = e2e_client.post("/api/groups", headers=missing_auth)
+        assert group_response.status_code == 201
+        group_id = group_response.get_json()["data"]["id"]
+
         create_response = e2e_client.post(
             "/api/tests",
-            json={"test_type": "drawing"},
-            headers={
-                "Authorization": f"Bearer {tokens['access_token']}",
-                "Content-Type": "application/json",
-            },
+            json={"test_type": "drawing", "group_id": group_id},
+            headers=missing_auth,
         )
         assert create_response.status_code == 201
         test_id = create_response.get_json()["data"]["id"]

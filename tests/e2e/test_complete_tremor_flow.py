@@ -86,11 +86,16 @@ class TestCompleteTremorFlow:
         pair_data = pair_response.get_json()
         assert pair_data["data"]["is_connected"] is False
 
-        # 4. Create Tremor Test
+        # 4. Create Group + Tremor Test
+        group_response = e2e_client.post("/api/groups", headers=auth_headers)
+        assert group_response.status_code == 201
+        group_id = group_response.get_json()["data"]["id"]
+
         create_response = e2e_client.post(
             "/api/tests",
             json={
                 "test_type": "tremor",
+                "group_id": group_id,
                 "config": {
                     "0": True,
                     "1": True,
@@ -279,14 +284,20 @@ class TestCompleteTremorFlow:
             db.session.commit()
             esp32_api_key = esp32.api_key
 
-        # Create test with only step 0
+        auth_headers_single = {
+            "Authorization": f"Bearer {tokens['access_token']}",
+            "Content-Type": "application/json",
+        }
+
+        # Create group then test with only step 0
+        group_resp = e2e_client.post("/api/groups", headers=auth_headers_single)
+        assert group_resp.status_code == 201
+        group_id = group_resp.get_json()["data"]["id"]
+
         create_response = e2e_client.post(
             "/api/tests",
-            json={"test_type": "tremor", "config": {"0": True}},
-            headers={
-                "Authorization": f"Bearer {tokens['access_token']}",
-                "Content-Type": "application/json",
-            },
+            json={"test_type": "tremor", "group_id": group_id, "config": {"0": True}},
+            headers=auth_headers_single,
         )
         assert create_response.status_code == 201
         test_id = create_response.get_json()["data"]["id"]
@@ -371,17 +382,24 @@ class TestCompleteTremorFlow:
             db.session.commit()
             esp32_api_key = esp32.api_key
 
-        # Create test with 3 subtests
+        partial_auth_headers = {
+            "Authorization": f"Bearer {tokens['access_token']}",
+            "Content-Type": "application/json",
+        }
+
+        # Create group then test with 3 subtests
+        group_resp = e2e_client.post("/api/groups", headers=partial_auth_headers)
+        assert group_resp.status_code == 201
+        group_id = group_resp.get_json()["data"]["id"]
+
         create_response = e2e_client.post(
             "/api/tests",
             json={
                 "test_type": "tremor",
+                "group_id": group_id,
                 "config": {"0": True, "1": True, "2": True},
             },
-            headers={
-                "Authorization": f"Bearer {tokens['access_token']}",
-                "Content-Type": "application/json",
-            },
+            headers=partial_auth_headers,
         )
         assert create_response.status_code == 201
         test_id = create_response.get_json()["data"]["id"]
