@@ -104,7 +104,7 @@ def stream():
     device_id = device_info["id"]
     device_id_str = device_info["device_id"]
 
-    logger.info(f"ESP32 stream connected: device_id={device_id_str}, user_id={user_id}")
+    logger.info(f"ESP32 stream connected: device={device_id_str} user={user_id}")
 
     # Create a message queue for this connection
     msg_queue = queue.Queue(maxsize=100)
@@ -122,39 +122,25 @@ def stream():
     db.session.expire_all()
 
     def event_stream():
-        logger.info(
-            f"[SSE STREAM] Starting event stream for device {device_id_str}, user {user_id}"
-        )
         try:
-            # Send initial connected event
-            logger.debug(
-                f"[SSE STREAM] Sending 'connected' event to device {device_id_str}"
-            )
             yield format_sse(event="connected", data={"device_id": device_id_str})
 
             while True:
                 try:
-                    # Wait for messages with timeout for keep-alive
                     msg = msg_queue.get(timeout=SSE_HEARTBEAT_INTERVAL)
                     logger.info(
-                        f"[SSE STREAM] Forwarding event '{msg['event']}' to device {device_id_str}"
+                        f"ESP32 event forwarded: '{msg['event']}' to device={device_id_str}"
                     )
-                    logger.debug(f"[SSE STREAM] Event data: {msg['data']}")
                     yield format_sse(event=msg["event"], data=msg["data"])
-                    logger.debug(
-                        f"[SSE STREAM] Event '{msg['event']}' sent successfully"
-                    )
                 except queue.Empty:
-                    # Send heartbeat to keep connection alive
                     yield format_sse(
                         event="heartbeat",
                         data={"timestamp": datetime.utcnow().isoformat()},
                     )
         except GeneratorExit:
-            logger.info(f"[SSE STREAM] GeneratorExit for device {device_id_str}")
+            pass
         finally:
-            # Cleanup on disconnect - get a fresh session since request context is gone
-            logger.info(f"ESP32 stream disconnected: device_id={device_id_str}")
+            logger.info(f"ESP32 stream disconnected: device={device_id_str}")
             connection_manager.remove(user_id)
             try:
                 dev = db.session.get(ESP32Device, device_id)
