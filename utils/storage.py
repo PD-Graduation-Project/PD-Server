@@ -1,13 +1,22 @@
 import os
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional
 
+from loguru import logger
 from werkzeug.datastructures import FileStorage
 from werkzeug.utils import secure_filename
 
-# Base upload directory
-UPLOAD_DIR = Path("uploads")
+# Base upload directory (absolute path to avoid issues when cwd changes)
+UPLOAD_DIR = Path(__file__).parent.parent / "uploads"
+
+# Thread pool for async IMU file writes
+# max_workers=4 handles up to 4 simultaneous writes (22 subtests/hand combos max)
+_imu_write_pool = ThreadPoolExecutor(max_workers=4, thread_name_prefix="imu_write")
+
+# Estimated bytes per row in the output format: timestamp (12) + 6 floats (~20 each) + newline
+_BYTES_PER_ROW = 140
 
 # Allowed extensions per test type
 ALLOWED_EXTENSIONS = {
@@ -134,6 +143,33 @@ def delete_file(file_path: str) -> bool:
         return False
 
 
+def _write_imu_data(file_path: Path, imu_data: dict, sample_rate: float) -> None:
+    """
+    Background worker that writes IMU data to disk.
+    Runs in a thread pool — any exception is logged but not propagated.
+    """
+    ax = imu_data.get("ax", [])
+    ay = imu_data.get("ay", [])
+    az = imu_data.get("az", [])
+    gx = imu_data.get("gx", [])
+    gy = imu_data.get("gy", [])
+    gz = imu_data.get("gz", [])
+
+    num_samples = len(ax)
+    dt = 1.0 / sample_rate
+
+    try:
+        with open(file_path, "w") as f:
+            for i in range(num_samples):
+                timestamp = i * dt
+                f.write(
+                    f"{timestamp:.10f},{ax[i]},{ay[i]},{az[i]},{gx[i]},{gy[i]},{gz[i]}\n"
+                )
+        logger.debug(f"Async IMU write completed: {file_path}")
+    except Exception as e:
+        logger.error(f"Async IMU write failed for {file_path}: {e}")
+
+
 def save_imu_data(
     test_type: str,
     test_id: int,
@@ -143,6 +179,7 @@ def save_imu_data(
 ) -> tuple[str, int]:
     """
     Save IMU data arrays to a CSV-style TXT file compatible with the ML model.
+    Returns immediately — the actual file write runs in a background thread.
 
     Format (no header, 7 float columns):
         timestamp,ax,ay,az,gx,gy,gz
@@ -161,7 +198,7 @@ def save_imu_data(
         sample_rate: Sampling rate in Hz used to compute timestamps (default 100 Hz)
 
     Returns:
-        tuple: (file_path, file_size)
+        tuple: (file_path, estimated_file_size)
     """
     upload_dir = get_upload_path(test_type, test_id)
     upload_dir.mkdir(parents=True, exist_ok=True)
@@ -181,18 +218,12 @@ def save_imu_data(
     if not (len(ay) == len(ax) == len(az) == len(gx) == len(gy) == len(gz)):
         raise ValueError("All IMU arrays must have the same length")
 
-    dt = 1.0 / sample_rate
+    # Submit the write to the background thread pool
+    _imu_write_pool.submit(_write_imu_data, file_path, imu_data, sample_rate)
 
-    with open(file_path, "w") as f:
-        for i in range(num_samples):
-            timestamp = i * dt
-            f.write(
-                f"{timestamp:.10f},{ax[i]},{ay[i]},{az[i]},{gx[i]},{gy[i]},{gz[i]}\n"
-            )
-
-    file_size = os.path.getsize(file_path)
-
-    return str(file_path), file_size
+    # Return immediately with estimated size
+    estimated_size = num_samples * _BYTES_PER_ROW
+    return str(file_path), estimated_size
 
 
 def cleanup_test_directory(test_type: str, test_id: int) -> bool:

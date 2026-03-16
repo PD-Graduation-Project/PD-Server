@@ -10,7 +10,7 @@ Tests all three prediction modalities:
 
 from pathlib import Path
 
-from utils.helper_functions import *
+from ml_utils.helper_functions import *
 
 # =============
 # DATA PATHS

@@ -33,8 +33,7 @@ Notes:
 
 import numpy as np
 import torch
-
-from models.densenet169 import DenseNet1691D
+from ml_models.densenet169 import DenseNet1691D
 
 # -------------------------------------------------
 # Fixed boundaries (must match training)

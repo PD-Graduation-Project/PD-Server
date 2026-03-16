@@ -9,9 +9,8 @@ import albumentations as A
 import numpy as np
 import torch
 from albumentations.pytorch import ToTensorV2
+from ml_models.mobilenetV3 import MobileNetV3LargeBinary
 from PIL import Image
-
-from models.mobilenetV3 import MobileNetV3LargeBinary
 
 
 # -------------------------

@@ -19,7 +19,7 @@ body:json {
 example {
   name: 200 Response
   description: Token refreshed successfully
-  
+
   request: {
     url: {{baseUrl}}/api/auth/refresh
     method: POST
@@ -30,17 +30,17 @@ example {
       }
     }
   }
-  
+
   response: {
     headers: {
       Content-Type: application/json
     }
-  
+
     status: {
       code: 200
       text: OK
     }
-  
+
     body: {
       type: json
       content: '''
@@ -57,7 +57,7 @@ example {
 example {
   name: 400 Response
   description: Bad request - missing refresh token
-  
+
   request: {
     url: {{baseUrl}}/api/auth/refresh
     method: POST
@@ -66,17 +66,17 @@ example {
       {}
     }
   }
-  
+
   response: {
     headers: {
       Content-Type: application/json
     }
-  
+
     status: {
       code: 400
       text: Bad Request
     }
-  
+
     body: {
       type: json
       content: '''
@@ -91,7 +91,7 @@ example {
 example {
   name: 401 Response
   description: Unauthorized - invalid or expired refresh token
-  
+
   request: {
     url: {{baseUrl}}/api/auth/refresh
     method: POST
@@ -102,17 +102,17 @@ example {
       }
     }
   }
-  
+
   response: {
     headers: {
       Content-Type: application/json
     }
-  
+
     status: {
       code: 401
       text: Unauthorized
     }
-  
+
     body: {
       type: json
       content: '''

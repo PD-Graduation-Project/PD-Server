@@ -20,7 +20,7 @@ body:json {
 example {
   name: 201 Response
   description: User registered successfully
-  
+
   request: {
     url: {{baseUrl}}/api/auth/register
     method: POST
@@ -32,17 +32,17 @@ example {
       }
     }
   }
-  
+
   response: {
     headers: {
       Content-Type: application/json
     }
-  
+
     status: {
       code: 201
       text: Created
     }
-  
+
     body: {
       type: json
       content: '''
@@ -66,7 +66,7 @@ example {
 example {
   name: 400 Response
   description: Bad request - missing email or password
-  
+
   request: {
     url: {{baseUrl}}/api/auth/register
     method: POST
@@ -78,17 +78,17 @@ example {
       }
     }
   }
-  
+
   response: {
     headers: {
       Content-Type: application/json
     }
-  
+
     status: {
       code: 400
       text: Bad Request
     }
-  
+
     body: {
       type: json
       content: '''
@@ -103,7 +103,7 @@ example {
 example {
   name: 409 Response
   description: Conflict - email already registered
-  
+
   request: {
     url: {{baseUrl}}/api/auth/register
     method: POST
@@ -115,17 +115,17 @@ example {
       }
     }
   }
-  
+
   response: {
     headers: {
       Content-Type: application/json
     }
-  
+
     status: {
       code: 409
       text: Conflict
     }
-  
+
     body: {
       type: json
       content: '''

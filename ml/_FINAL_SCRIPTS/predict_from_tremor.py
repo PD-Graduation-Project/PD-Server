@@ -42,7 +42,7 @@ import torch
 # -------------------------
 # Model
 # -------------------------
-from models.tremorNet import TremorClassifier
+from ml_models.tremorNet import TremorClassifier
 
 # -------------------------
 # Constants (MUST MATCH TRAINING)

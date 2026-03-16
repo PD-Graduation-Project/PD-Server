@@ -19,9 +19,8 @@ Expected model input order (25 features):
 import joblib
 import numpy as np
 import torch
-
-from models.densenet169 import DenseNet1691D
-from utils.uams_feature_extractor import UAMSFeatureExtractor
+from ml_models.densenet169 import DenseNet1691D
+from ml_utils.uams_feature_extractor import UAMSFeatureExtractor
 
 
 # -------------------------

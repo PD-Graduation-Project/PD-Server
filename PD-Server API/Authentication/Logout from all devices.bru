@@ -17,7 +17,7 @@ auth:bearer {
 example {
   name: 200 Response
   description: Logged out from all devices successfully
-  
+
   request: {
     url: {{baseUrl}}/api/auth/logout-all
     method: POST
@@ -26,17 +26,17 @@ example {
       token: "your_access_token"
     }
   }
-  
+
   response: {
     headers: {
       Content-Type: application/json
     }
-  
+
     status: {
       code: 200
       text: OK
     }
-  
+
     body: {
       type: json
       content: '''
@@ -51,22 +51,22 @@ example {
 example {
   name: 401 Response
   description: Unauthorized - missing or invalid access token
-  
+
   request: {
     url: {{baseUrl}}/api/auth/logout-all
     method: POST
   }
-  
+
   response: {
     headers: {
       Content-Type: application/json
     }
-  
+
     status: {
       code: 401
       text: Unauthorized
     }
-  
+
     body: {
       type: json
       content: '''

@@ -17,7 +17,7 @@ auth:bearer {
 example {
   name: 200 Response
   description: List of active sessions
-  
+
   request: {
     url: {{baseUrl}}/api/auth/sessions
     method: GET
@@ -26,17 +26,17 @@ example {
       token: "your_access_token"
     }
   }
-  
+
   response: {
     headers: {
       Content-Type: application/json
     }
-  
+
     status: {
       code: 200
       text: OK
     }
-  
+
     body: {
       type: json
       content: '''
@@ -59,22 +59,22 @@ example {
 example {
   name: 401 Response
   description: Unauthorized - missing or invalid access token
-  
+
   request: {
     url: {{baseUrl}}/api/auth/sessions
     method: GET
   }
-  
+
   response: {
     headers: {
       Content-Type: application/json
     }
-  
+
     status: {
       code: 401
       text: Unauthorized
     }
-  
+
     body: {
       type: json
       content: '''
