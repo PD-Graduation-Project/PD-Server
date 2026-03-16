@@ -20,6 +20,7 @@ ANSI_ESCAPE = re.compile(r"\033\[[0-9;]*m")
 RESET = "\033[0m"
 GREEN = "\033[32m"
 CYAN = "\033[36m"
+DIM = "\033[2m"
 DIM_YELLOW = "\033[2;33m"  # body / form text
 
 LEVEL_COLORS = {
@@ -186,7 +187,9 @@ def create_app(config_override=None):
                 + str(response.status_code)
                 + RESET
                 + " "
+                + DIM
                 + f"{duration:.2f}ms"
+                + RESET
             )
             response.headers["X-Request-ID"] = g.get("request_id", "")
         except Exception:
