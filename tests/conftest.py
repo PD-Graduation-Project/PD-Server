@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+from unittest.mock import patch
 
 import pytest
 
@@ -6,6 +7,30 @@ from app import create_app  # Adjust import based on your app structure
 from models.database import db
 from models.test_models import ESP32Device, TestGroup, TestInput, TestSession
 from models.user import RefreshToken, User
+
+
+@pytest.fixture(autouse=True)
+def mock_ml_predictor():
+    """
+    Automatically mock all ML predictor functions for every test.
+    Prevents tests from loading PyTorch models and running real inference.
+    """
+    with (
+        patch("ml.predictor.predict_drawing", return_value=0.5) as mock_drawing,
+        patch("ml.predictor.predict_tremor", return_value=0.5) as mock_tremor,
+        patch("ml.predictor.predict_voice", return_value=0.5) as mock_voice,
+        patch(
+            "ml.predictor.predict_questionnaire", return_value=0.5
+        ) as mock_questionnaire,
+        patch("ml.overall_model.predict_overall", return_value=0.5) as mock_overall,
+    ):
+        yield {
+            "predict_drawing": mock_drawing,
+            "predict_tremor": mock_tremor,
+            "predict_voice": mock_voice,
+            "predict_questionnaire": mock_questionnaire,
+            "predict_overall": mock_overall,
+        }
 
 
 @pytest.fixture(scope="session")

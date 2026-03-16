@@ -439,15 +439,15 @@ def complete_test(test_id):
 
     ml_score = None
     if test_session.test_type == "tremor":
-        from ml.tremor_model import predict_tremor
+        from ml.predictor import predict_tremor
 
         ml_score = predict_tremor(test_session.id)
     elif test_session.test_type == "drawing":
-        from ml.drawing_model import predict_drawing
+        from ml.predictor import predict_drawing
 
         ml_score = predict_drawing(test_session.id)
     elif test_session.test_type == "voice":
-        from ml.voice_model import predict_voice
+        from ml.predictor import predict_voice
 
         ml_score = predict_voice(test_session.id)
 
@@ -474,6 +474,7 @@ def complete_test(test_id):
                     tremor_score=type_to_score["tremor"],
                     drawing_score=type_to_score["drawing"],
                     voice_score=type_to_score["voice"],
+                    user_id=test_session.user_id,
                 )
                 group.overall_score = group_overall_score
                 group.status = "completed"

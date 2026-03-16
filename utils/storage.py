@@ -139,21 +139,26 @@ def save_imu_data(
     test_id: int,
     filename: str,
     imu_data: dict,
+    sample_rate: float = 100.0,
 ) -> tuple[str, int]:
     """
-    Save IMU data arrays to a CSV-style TXT file.
+    Save IMU data arrays to a CSV-style TXT file compatible with the ML model.
 
-    Format:
-        const,ax,ay,az,gx,gy,gz
-        0,ax0,ay0,az0,gx0,gy0,gz0
-        1,ax1,ay1,az1,gx1,gy1,gz1
+    Format (no header, 7 float columns):
+        timestamp,ax,ay,az,gx,gy,gz
+        0.0000000000,ax0,ay0,az0,gx0,gy0,gz0
+        0.0100000000,ax1,ay1,az1,gx1,gy1,gz1
         ...
+
+    The timestamp column is derived from sample_rate and is stripped by the
+    model's preprocessing pipeline (_remove_timestamp_column).
 
     Args:
         test_type: Type of test (tremor)
         test_id: Test session ID
         filename: Name of the file
         imu_data: Dict with keys ax, ay, az, gx, gy, gz (each a list of floats)
+        sample_rate: Sampling rate in Hz used to compute timestamps (default 100 Hz)
 
     Returns:
         tuple: (file_path, file_size)
@@ -176,10 +181,14 @@ def save_imu_data(
     if not (len(ay) == len(ax) == len(az) == len(gx) == len(gy) == len(gz)):
         raise ValueError("All IMU arrays must have the same length")
 
+    dt = 1.0 / sample_rate
+
     with open(file_path, "w") as f:
-        f.write("const,ax,ay,az,gx,gy,gz\n")
         for i in range(num_samples):
-            f.write(f"{i},{ax[i]},{ay[i]},{az[i]},{gx[i]},{gy[i]},{gz[i]}\n")
+            timestamp = i * dt
+            f.write(
+                f"{timestamp:.10f},{ax[i]},{ay[i]},{az[i]},{gx[i]},{gy[i]},{gz[i]}\n"
+            )
 
     file_size = os.path.getsize(file_path)
 

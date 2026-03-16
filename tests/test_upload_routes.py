@@ -775,7 +775,7 @@ class TestCompleteTest:
 
         import pytest
 
-        with patch("ml.drawing_model.predict_drawing") as mock_predict:
+        with patch("ml.predictor.predict_drawing") as mock_predict:
             mock_predict.side_effect = Exception("ML model failed")
 
             # Currently the exception propagates and returns 500

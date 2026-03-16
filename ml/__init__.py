@@ -1,14 +1,18 @@
 """
 ML Prediction module.
-Contains models for tremor, drawing, and voice predictions.
+Interfaces the _FINAL_SCRIPTS prediction pipeline with the Flask server.
 """
 
-from ml.drawing_model import predict_drawing
-from ml.tremor_model import predict_tremor
-from ml.voice_model import predict_voice
+from ml.predictor import (
+    predict_drawing,
+    predict_questionnaire,
+    predict_tremor,
+    predict_voice,
+)
 
 __all__ = [
     "predict_tremor",
     "predict_drawing",
     "predict_voice",
+    "predict_questionnaire",
 ]

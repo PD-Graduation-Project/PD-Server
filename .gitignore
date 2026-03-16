@@ -9,3 +9,4 @@ venv/
 .envrc
 .coverage
 logs/
+ml/*/weights/

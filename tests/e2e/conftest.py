@@ -2,12 +2,30 @@ import io
 import secrets
 import uuid
 from typing import Dict, List, Optional, Tuple
+from unittest.mock import patch
 
 import pytest
 
 from models.database import db
 from models.test_models import ESP32Device
 from models.user import User
+
+
+@pytest.fixture(autouse=True)
+def mock_ml_predictor_e2e():
+    """
+    Automatically mock all ML predictor functions for every E2E test.
+    Prevents tests from loading PyTorch models and running real inference.
+    """
+    with (
+        patch("ml.predictor.predict_drawing", return_value=0.5),
+        patch("ml.predictor.predict_tremor", return_value=0.5),
+        patch("ml.predictor.predict_voice", return_value=0.5),
+        patch("ml.predictor.predict_questionnaire", return_value=0.5),
+        patch("ml.overall_model.predict_overall", return_value=0.5),
+    ):
+        yield
+
 
 # =============================================================================
 # E2E Fixtures
@@ -185,20 +203,25 @@ class E2ETestDataGenerator:
         subtest: int, hand: str, samples: int = 100, sample_rate_hz: int = 100
     ) -> bytes:
         """
-        Generate gyroscope data in the format expected by the API.
+        Generate IMU data in the format expected by the ML model.
 
-        Format: timestamp_ms,gx,gy,gz (one per line)
+        Format: timestamp,ax,ay,az,gx,gy,gz (no header, 7 float columns)
+        Matches the output of save_imu_data().
         """
         lines = []
-        interval_ms = 1000 // sample_rate_hz
+        dt = 1.0 / sample_rate_hz
 
         for i in range(samples):
-            timestamp = i * interval_ms
-            # Simulate realistic gyro data with some variation
-            gx = ((i % 100) / 100.0) - 0.5 + (subtest * 0.1)
-            gy = (((i + 50) % 100) / 100.0) - 0.5
-            gz = (((i + 25) % 100) / 100.0) - 0.5
-            lines.append(f"{timestamp},{gx:.6f},{gy:.6f},{gz:.6f}")
+            timestamp = i * dt
+            ax = ((i % 100) / 100.0) - 0.5 + (subtest * 0.01)
+            ay = (((i + 33) % 100) / 100.0) - 0.5
+            az = (((i + 66) % 100) / 100.0) - 0.5
+            gx = ((i % 100) / 1000.0) - 0.05
+            gy = (((i + 50) % 100) / 1000.0) - 0.05
+            gz = (((i + 25) % 100) / 1000.0) - 0.05
+            lines.append(
+                f"{timestamp:.10f},{ax:.10f},{ay:.10f},{az:.10f},{gx:.10f},{gy:.10f},{gz:.10f}"
+            )
 
         return "\n".join(lines).encode("utf-8")
 

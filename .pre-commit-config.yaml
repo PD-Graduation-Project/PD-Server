@@ -18,11 +18,12 @@ repos:
     rev: 7.0.0
     hooks:
       - id: flake8
+        exclude: "ml/_FINAL_SCRIPTS/"
   - repo: https://github.com/pre-commit/mirrors-mypy
     rev: v1.8.0 # Use the same version as in requirements-dev.txt
     hooks:
       - id: mypy
-        args: [--no-strict-optional, --ignore-missing-imports] # Adjust args as needed
+        args: [--no-strict-optional, --ignore-missing-imports, --exclude=ml/_FINAL_SCRIPTS] # Adjust args as needed
   - repo: local
     hooks:
       - id: pytest

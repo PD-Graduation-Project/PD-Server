@@ -27,5 +27,12 @@ reportUnknownVariableType = "none"
 reportUnknownArgumentType = "none"
 
 [[tool.mypy.overrides]]
-module = ["redis.*"]
+module = ["redis.*", "yaml"]
 ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "ml._FINAL_SCRIPTS.*"
+ignore_missing_imports = true
+
+[tool.mypy]
+exclude = ["ml/_FINAL_SCRIPTS"]
