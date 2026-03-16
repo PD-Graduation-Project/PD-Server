@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 
 from flask import Blueprint, g, jsonify, request
+from loguru import logger
 
 from middleware.authenticate import authenticate
 from middleware.authenticate_esp32 import authenticate_jwt_or_esp32
@@ -8,6 +9,7 @@ from models.database import db
 from models.test_models import TestGroup, TestInput, TestSession
 from models.user import User
 from utils.storage import (
+    delete_file,
     generate_drawing_filename,
     generate_tremor_filename,
     generate_voice_filename,
@@ -495,6 +497,76 @@ def complete_test(test_id):
                     "group_completed": group_overall_score is not None,
                     "group_overall_score": group_overall_score,
                 },
+            }
+        ),
+        200,
+    )
+
+
+@upload_bp.route("/<int:test_id>/reset", methods=["POST"])
+@authenticate_jwt_or_esp32
+def reset_test(test_id):
+    """
+    Reset a test session by deleting all uploaded files and inputs,
+    and setting the status back to pending.
+
+    Only allowed if the test's group is NOT completed.
+    Auth: JWT user (owner) or paired ESP32 device.
+    """
+    current_user = db.session.get(User, g.user_id)
+    if not current_user:
+        return jsonify({"error": "User not found"}), 404
+
+    test_session = db.session.get(TestSession, test_id)
+    if not test_session:
+        return jsonify({"error": "Test not found"}), 404
+
+    if test_session.user_id != current_user.id:
+        return jsonify({"error": "Forbidden"}), 403
+
+    # Check if group is completed - reject reset if so
+    if test_session.group_id:
+        group = db.session.get(TestGroup, test_session.group_id)
+        if group and group.status == "completed":
+            return (
+                jsonify(
+                    {
+                        "error": "Cannot reset test in a completed group. "
+                        "Create a new test session instead."
+                    }
+                ),
+                409,
+            )
+
+    # Delete uploaded files from disk
+    inputs = TestInput.query.filter_by(test_session_id=test_id).all()
+    for inp in inputs:
+        if inp.file_path:
+            delete_file(inp.file_path)
+        db.session.delete(inp)
+
+    # Reset session state
+    test_session.status = "pending"
+    test_session.ml_score = None
+    test_session.completed_at = None
+
+    # Reset group state if applicable
+    if test_session.group_id:
+        group = db.session.get(TestGroup, test_session.group_id)
+        if group and group.status == "completed":
+            group.status = "in_progress"
+            group.overall_score = None
+            group.completed_at = None
+
+    db.session.commit()
+
+    logger.info(f"Test {test_id} reset by user {current_user.id}")
+
+    return (
+        jsonify(
+            {
+                "success": True,
+                "data": {"message": "Test reset successfully", "status": "pending"},
             }
         ),
         200,
