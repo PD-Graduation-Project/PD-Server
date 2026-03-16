@@ -1,7 +1,7 @@
-import logging
 from typing import Any, cast
 
 from flask import Blueprint, g, jsonify, request
+from loguru import logger
 from sqlalchemy.orm import selectinload
 
 from middleware.authenticate import authenticate
@@ -13,7 +13,6 @@ from utils.esp32_connection_manager import connection_manager
 from utils.validation import get_json_body, get_query_params
 
 test_bp = Blueprint("test", __name__, url_prefix="/api/tests")
-logger = logging.getLogger(__name__)
 
 
 @test_bp.route("", methods=["POST"])

@@ -1,20 +1,57 @@
 import logging
+import sys
+import time
+import uuid
 
-from flask import Flask, abort, jsonify, request
+from flask import Flask, abort, g, jsonify, request
 from flask_cors import CORS
 from flask_migrate import Migrate
+from loguru import logger
 
 from config import Config
 from models.database import db
 
-logging.basicConfig(
-    level=logging.DEBUG,
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+logger.remove()
+logger.add(
+    sys.stderr,
+    format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{extra[request_id]}</cyan> | <level>{message}</level>",
+    level="DEBUG",
+    colorize=True,
+)
+logger.add(
+    sys.stderr,
+    format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>",
+    level="DEBUG",
+    colorize=True,
+    filter=lambda record: "request_id" not in record["extra"],
 )
 
-logging.getLogger("utils.esp32_connection_manager").setLevel(logging.INFO)
-logging.getLogger("routes.test_routes").setLevel(logging.INFO)
-logging.getLogger("routes.esp32_routes").setLevel(logging.INFO)
+logging.getLogger("werkzeug").setLevel(logging.WARNING)
+
+
+def get_status_color(code):
+    if 200 <= code < 300:
+        return "\033[32m"
+    elif 300 <= code < 400:
+        return "\033[33m"
+    elif 400 <= code < 500:
+        return "\033[33m"
+    else:
+        return "\033[31m"
+
+
+def get_method_color(method):
+    colors = {
+        "GET": "\033[36m",  # cyan
+        "POST": "\033[32m",  # green
+        "PUT": "\033[34m",  # blue
+        "PATCH": "\033[35m",  # magenta
+        "DELETE": "\033[31m",  # red
+    }
+    return colors.get(method.upper(), "\033[37m")
+
+
+RESET = "\033[0m"
 
 
 def create_app(config_override=None):
@@ -24,10 +61,8 @@ def create_app(config_override=None):
     if config_override:
         app.config.update(config_override)
 
-    # Apply Config.init_app (sets pool options, creates upload folder, etc.)
     Config.init_app(app)
 
-    # Initialize extensions
     db.init_app(app)
     Migrate(app, db)
 
@@ -37,6 +72,50 @@ def create_app(config_override=None):
     def check_ip():
         if Config.ALLOWED_IPS and request.remote_addr not in Config.ALLOWED_IPS:
             abort(403)
+
+    @app.before_request
+    def log_request():
+        try:
+            g.start_time = time.time()
+            g.request_id = str(uuid.uuid4())[:8]
+            method_color = get_method_color(request.method)
+            logger.bind(request_id=g.request_id).info(
+                "→ " + method_color + request.method + RESET + " " + request.path
+            )
+            body = request.get_data(as_text=True)
+            if body:
+                logger.bind(request_id=g.request_id).debug("  Body: " + body[:500])
+            elif request.form:
+                logger.bind(request_id=g.request_id).debug(
+                    "  Form: " + str(dict(request.form))
+                )
+        except Exception:
+            pass
+
+    @app.after_request
+    def log_response(response):
+        try:
+            duration = (time.time() - g.get("start_time", time.time())) * 1000
+            status_color = get_status_color(response.status_code)
+            method_color = get_method_color(request.method)
+            logger.bind(request_id=g.get("request_id", "N/A")).info(
+                "← "
+                + method_color
+                + request.method
+                + RESET
+                + " "
+                + request.path
+                + " "
+                + status_color
+                + str(response.status_code)
+                + RESET
+                + " "
+                + "{:.2f}ms".format(duration)
+            )
+            response.headers["X-Request-ID"] = g.get("request_id", "")
+        except Exception:
+            pass
+        return response
 
     from routes.auth_routes import auth_bp
     from routes.esp32_devices_routes import esp32_devices_bp

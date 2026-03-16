@@ -1,14 +1,12 @@
 import json
-import logging
 import queue
 import threading
 from functools import wraps
 
 import redis
+from loguru import logger
 
 from config import Config
-
-logger = logging.getLogger(__name__)
 
 
 def debug_log(func):

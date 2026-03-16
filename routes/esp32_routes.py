@@ -1,9 +1,9 @@
-import logging
 import queue
 import secrets
 from datetime import datetime
 
 from flask import Blueprint, Response, g, jsonify, request, stream_with_context
+from loguru import logger
 
 from middleware.authenticate_esp32 import authenticate_esp32, authenticate_esp32_factory
 from models.database import db
@@ -12,7 +12,6 @@ from utils.esp32_connection_manager import connection_manager
 from utils.factory_key import validate_device_id_format, verify_factory_key
 
 esp32_bp = Blueprint("esp32", __name__, url_prefix="/api/esp32")
-logger = logging.getLogger(__name__)
 
 # Heartbeat interval for SSE keep-alive (seconds)
 SSE_HEARTBEAT_INTERVAL = 30

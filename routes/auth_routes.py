@@ -58,17 +58,24 @@ def generate_refresh_token(user_id, device_info=None, ip_address=None):
     return token
 
 
-def verify_refresh_token(token, user_id):
+def verify_refresh_token(token, user_id=None):
     """
-    Optimized: Only queries tokens for the specific user_id.
+    Verify a refresh token and return the token object if valid.
+
+    If user_id is provided, only checks tokens for that specific user (optimized).
+    If user_id is None, checks all valid tokens (needed for refresh endpoint
+    when access token is expired).
     """
     try:
-        # Only fetch tokens for THIS user that are still valid
-        valid_tokens = RefreshToken.query.filter(
-            RefreshToken.user_id == user_id,
+        query = RefreshToken.query.filter(
             RefreshToken.revoked.is_(False),
             RefreshToken.expires_at > datetime.datetime.now(timezone.utc),
-        ).all()
+        )
+
+        if user_id is not None:
+            query = query.filter(RefreshToken.user_id == user_id)
+
+        valid_tokens = query.all()
 
         for db_token in valid_tokens:
             if check_password_hash(db_token.token_hash, token):
@@ -140,8 +147,13 @@ def login():
 
 
 @auth_bp.route("/refresh", methods=["POST"])
-@authenticate
 def refresh():
+    """
+    Refresh an expired access token using a valid refresh token.
+
+    Does NOT require @authenticate because the whole point of calling
+    this endpoint is that the access token is already expired.
+    """
     schema = RefreshSchema()
     raw_body, error = get_json_body(request)
     if error:
@@ -153,14 +165,14 @@ def refresh():
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
-    # We pass g.user_id to optimize the query
-    db_token = verify_refresh_token(data["refresh_token"], g.user_id)
+    # Verify refresh token WITHOUT requiring access token (user_id unknown at this point)
+    db_token = verify_refresh_token(data["refresh_token"], user_id=None)
 
     if not db_token:
         return jsonify({"error": "Invalid or expired refresh token"}), 401
 
-    # Generate new access token
-    access_token = generate_access_token(g.user_id)
+    # Generate new access token using the user_id from the refresh token
+    access_token = generate_access_token(db_token.user_id)
 
     return (
         jsonify(
