@@ -1,5 +1,8 @@
 import logging
+import os
+import re
 import sys
+import threading
 import time
 import uuid
 
@@ -11,49 +14,120 @@ from loguru import logger
 from config import Config
 from models.database import db
 
-logger.remove()
-logger.add(
-    sys.stderr,
-    format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{extra[request_id]}</cyan> | <level>{message}</level>",
-    level="DEBUG",
-    colorize=True,
-)
-logger.add(
-    sys.stderr,
-    format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>",
-    level="DEBUG",
-    colorize=True,
-    filter=lambda record: "request_id" not in record["extra"],
-)
-
-logging.getLogger("werkzeug").setLevel(logging.WARNING)
-
-
-def get_status_color(code):
-    if 200 <= code < 300:
-        return "\033[32m"
-    elif 300 <= code < 400:
-        return "\033[33m"
-    elif 400 <= code < 500:
-        return "\033[33m"
-    else:
-        return "\033[31m"
-
-
-def get_method_color(method):
-    colors = {
-        "GET": "\033[36m",  # cyan
-        "POST": "\033[32m",  # green
-        "PUT": "\033[34m",  # blue
-        "PATCH": "\033[35m",  # magenta
-        "DELETE": "\033[31m",  # red
-    }
-    return colors.get(method.upper(), "\033[37m")
-
+# ── ANSI helpers ──────────────────────────────────────────────────────────────
+ANSI_ESCAPE = re.compile(r"\033\[[0-9;]*m")
 
 RESET = "\033[0m"
+GREEN = "\033[32m"
+CYAN = "\033[36m"
+DIM_YELLOW = "\033[2;33m"  # body / form text
+
+LEVEL_COLORS = {
+    "TRACE": "\033[37m",
+    "DEBUG": "\033[34m",
+    "INFO": "\033[1m",
+    "SUCCESS": "\033[32m",
+    "WARNING": "\033[33m",
+    "ERROR": "\033[31m",
+    "CRITICAL": "\033[41m",
+}
+
+METHOD_COLORS = {
+    "GET": "\033[36m",
+    "POST": "\033[32m",
+    "PUT": "\033[34m",
+    "PATCH": "\033[35m",
+    "DELETE": "\033[31m",
+}
 
 
+def strip_ansi(s: str) -> str:
+    return ANSI_ESCAPE.sub("", s)
+
+
+def get_method_color(method: str) -> str:
+    return METHOD_COLORS.get(method.upper(), "\033[37m")
+
+
+def get_status_color(code: int) -> str:
+    if 200 <= code < 300:
+        return "\033[32m"
+    if 300 <= code < 500:
+        return "\033[33m"
+    return "\033[31m"
+
+
+# ── Log record renderer ───────────────────────────────────────────────────────
+def _build_record_str(record: dict, color: bool) -> str:
+    request_id = record["extra"].get("request_id")
+    level = record["level"].name
+    ts = record["time"].strftime("%Y-%m-%d %H:%M:%S")
+    msg = record["message"] if color else strip_ansi(record["message"])
+
+    if color:
+        level_c = LEVEL_COLORS.get(level, "")
+        ts_str = GREEN + ts + RESET
+        level_str = level_c + f"{level:<8}" + RESET
+        if request_id:
+            id_str = CYAN + request_id + RESET
+            return f"{ts_str} | {level_str} | {id_str} | {msg}\n"
+        loc = CYAN + f"{record['name']}:{record['function']}:{record['line']}" + RESET
+        return f"{ts_str} | {level_str} | {loc} - {msg}\n"
+    else:
+        if request_id:
+            return f"{ts} | {level:<8} | {request_id} | {msg}\n"
+        return f"{ts} | {level:<8} | {record['name']}:{record['function']}:{record['line']} - {msg}\n"
+
+
+# ── Sinks ─────────────────────────────────────────────────────────────────────
+def console_sink(message) -> None:
+    sys.stderr.write(_build_record_str(message.record, color=True))
+    sys.stderr.flush()
+
+
+_log_file = None
+_log_file_date: str | None = None
+_log_lock = threading.Lock()
+
+
+def file_sink(message) -> None:
+    global _log_file, _log_file_date
+    from datetime import date
+
+    today = date.today().isoformat()
+    with _log_lock:
+        if _log_file_date != today:
+            if _log_file:
+                _log_file.close()
+            os.makedirs("logs", exist_ok=True)
+            _log_file = open(f"logs/app_{today}.log", "a", encoding="utf-8")
+            _log_file_date = today
+        _log_file.write(_build_record_str(message.record, color=False))  # type: ignore[union-attr]
+        _log_file.flush()  # type: ignore[union-attr]
+
+
+# ── Logger init ───────────────────────────────────────────────────────────────
+logger.remove()
+logger.add(console_sink, level="DEBUG", format="{message}")
+logger.add(file_sink, level="DEBUG", format="{message}")
+
+# Keep werkzeug startup messages but suppress per-request access lines
+_wz_logger = logging.getLogger("werkzeug")
+_wz_logger.setLevel(logging.INFO)
+
+
+class _SuppressAccessLogs(logging.Filter):
+    """Drop werkzeug's '127.0.0.1 - - [date] "GET /" 200 -' lines."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        msg = record.getMessage()
+        return not (record.levelno == logging.INFO and " - - [" in msg and '"' in msg)
+
+
+_wz_logger.addFilter(_SuppressAccessLogs())
+
+
+# ── App factory ───────────────────────────────────────────────────────────────
 def create_app(config_override=None):
     app = Flask(__name__)
     app.config.from_object(Config)
@@ -84,10 +158,12 @@ def create_app(config_override=None):
             )
             body = request.get_data(as_text=True)
             if body:
-                logger.bind(request_id=g.request_id).debug("  Body: " + body[:500])
+                logger.bind(request_id=g.request_id).debug(
+                    "  Body: " + DIM_YELLOW + body[:500] + RESET
+                )
             elif request.form:
                 logger.bind(request_id=g.request_id).debug(
-                    "  Form: " + str(dict(request.form))
+                    "  Form: " + DIM_YELLOW + str(dict(request.form)) + RESET
                 )
         except Exception:
             pass
@@ -110,7 +186,7 @@ def create_app(config_override=None):
                 + str(response.status_code)
                 + RESET
                 + " "
-                + "{:.2f}ms".format(duration)
+                + f"{duration:.2f}ms"
             )
             response.headers["X-Request-ID"] = g.get("request_id", "")
         except Exception:

@@ -8,3 +8,4 @@ uploads/
 venv/
 .envrc
 .coverage
+logs/
