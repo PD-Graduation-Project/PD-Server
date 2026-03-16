@@ -2,7 +2,7 @@ import io
 import secrets
 import uuid
 from typing import Dict, List, Optional, Tuple
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -16,13 +16,21 @@ def mock_ml_predictor_e2e():
     """
     Automatically mock all ML predictor functions for every E2E test.
     Prevents tests from loading PyTorch models and running real inference.
+    Also mocks RQ queue to avoid enqueueing jobs in tests.
     """
+    mock_job = MagicMock()
+    mock_job.id = "test-job-id"
+
+    mock_queue = MagicMock()
+    mock_queue.enqueue.return_value = mock_job
+
     with (
         patch("ml.predictor.predict_drawing", return_value=0.5),
         patch("ml.predictor.predict_tremor", return_value=0.5),
         patch("ml.predictor.predict_voice", return_value=0.5),
         patch("ml.predictor.predict_questionnaire", return_value=0.5),
         patch("ml.overall_model.predict_overall", return_value=0.5),
+        patch("routes.upload_routes.get_ml_queue", return_value=mock_queue),
     ):
         yield
 

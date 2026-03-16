@@ -64,7 +64,9 @@ class TestSessionSchema(Schema):
     config = fields.Dict(keys=fields.String(), values=fields.Boolean(), dump_only=True)
     created_at = fields.DateTime(dump_only=True)
     completed_at = fields.DateTime(dump_only=True)
-    ml_score = fields.Float(dump_only=True)
+    ml_score = fields.Float(dump_only=True, allow_none=True)
+    ml_status = fields.String(dump_only=True, allow_none=True)
+    ml_job_id = fields.String(dump_only=True, allow_none=True)
     inputs = fields.List(fields.Nested(TestInputSchema), dump_only=True)
 
 

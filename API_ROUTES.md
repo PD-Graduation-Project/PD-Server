@@ -660,7 +660,7 @@ Get a single group by ID, including all linked test sessions and their file inpu
 GET /api/groups/3
 ```
 
-**Example response** `200`:
+**Example response** `200` (after all ML inference completes):
 
 ```json
 {
@@ -670,6 +670,8 @@ GET /api/groups/3
     "user_id": 1,
     "status": "completed",
     "overall_score": 0.68,
+    "ml_status": "completed",
+    "ml_job_id": null,
     "created_at": "2026-03-15T10:00:00",
     "completed_at": "2026-03-15T10:30:00",
     "tests": [
@@ -684,6 +686,8 @@ GET /api/groups/3
         "created_at": "2026-03-15T10:01:00",
         "completed_at": "2026-03-15T10:08:00",
         "ml_score": 0.72,
+        "ml_status": "completed",
+        "ml_job_id": null,
         "inputs": [
           {
             "id": 3,
@@ -707,6 +711,8 @@ GET /api/groups/3
         "created_at": "2026-03-15T10:10:00",
         "completed_at": "2026-03-15T10:15:00",
         "ml_score": 0.60,
+        "ml_status": "completed",
+        "ml_job_id": null,
         "inputs": []
       },
       {
@@ -720,6 +726,8 @@ GET /api/groups/3
         "created_at": "2026-03-15T10:20:00",
         "completed_at": "2026-03-15T10:25:00",
         "ml_score": 0.55,
+        "ml_status": "completed",
+        "ml_job_id": null,
         "inputs": []
       }
     ]
@@ -938,7 +946,7 @@ Get a single test session by its database ID.
 GET /api/tests/7
 ```
 
-**Example response** `200`:
+**Example response** `200` (while ML inference is processing):
 
 ```json
 {
@@ -946,13 +954,16 @@ GET /api/tests/7
   "data": {
     "id": 7,
     "user_id": 1,
+    "group_id": 3,
     "test_type": "tremor",
     "status": "completed",
     "device_source": "esp32",
     "config": {"0": true, "1": true, "5": true},
     "created_at": "2026-03-15T10:00:00",
     "completed_at": "2026-03-15T10:05:30",
-    "ml_score": 0.72,
+    "ml_score": null,
+    "ml_status": "processing",
+    "ml_job_id": "abc-123-def-456",
     "inputs": [
       {
         "id": 3,
@@ -962,15 +973,39 @@ GET /api/tests/7
         "file_size": 2048,
         "created_at": "2026-03-15T10:02:00",
         "expires_at": "2026-06-13T10:02:00"
-      },
+      }
+    ]
+  }
+}
+```
+
+**Example response** `200` (after ML inference completes):
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": 7,
+    "user_id": 1,
+    "group_id": 3,
+    "test_type": "tremor",
+    "status": "completed",
+    "device_source": "esp32",
+    "config": {"0": true, "1": true, "5": true},
+    "created_at": "2026-03-15T10:00:00",
+    "completed_at": "2026-03-15T10:05:30",
+    "ml_score": 0.72,
+    "ml_status": "completed",
+    "ml_job_id": null,
+    "inputs": [
       {
-        "id": 4,
+        "id": 3,
         "input_type": "tremor_gyro",
-        "file_path": "uploads/tremor/7/7_0_r.txt",
+        "file_path": "uploads/tremor/7/7_0_l.txt",
         "mime_type": "text/plain",
-        "file_size": 2104,
-        "created_at": "2026-03-15T10:02:15",
-        "expires_at": "2026-06-13T10:02:15"
+        "file_size": 2048,
+        "created_at": "2026-03-15T10:02:00",
+        "expires_at": "2026-06-13T10:02:00"
       }
     ]
   }
@@ -1188,7 +1223,7 @@ Upload a voice recording for a voice test.
 
 ### `POST /api/tests/<test_id>/complete`
 
-Mark a test as completed. The server validates that all required subtests have been uploaded, then runs the ML model to produce a score.
+Mark a test as completed. The server validates that all required subtests have been uploaded, then enqueues an ML inference job (runs asynchronously).
 
 **Auth required**: JWT (Mobile App) **or** `X-Device-API-Key` (ESP32)
 
@@ -1200,7 +1235,7 @@ Mark a test as completed. The server validates that all required subtests have b
 - `drawing`: Requires exactly 2 uploaded inputs.
 - `voice`: Requires exactly 1 uploaded input.
 
-**Example response** `200`:
+**Example response** `202`:
 
 ```json
 {
@@ -1208,17 +1243,18 @@ Mark a test as completed. The server validates that all required subtests have b
   "data": {
     "message": "Test completed",
     "status": "completed",
-    "ml_score": 0.72,
+    "ml_status": "processing",
+    "ml_job_id": "abc-123-def-456",
     "uploaded_count": 4,
     "expected_count": 4,
-    "missing": [],
-    "group_completed": false,
-    "group_overall_score": null
+    "missing": []
   }
 }
 ```
 
-**Example response** `200` — last test in the group to finish:
+**Note**: The response returns immediately with `ml_status: "processing"`. The client should poll `GET /api/tests/<test_id>` to check when `ml_status` changes to `"completed"` (with `ml_score`) or `"failed"`.
+
+**Example response** `202` — last test in the group to finish (group inference also async):
 
 ```json
 {
@@ -1226,15 +1262,16 @@ Mark a test as completed. The server validates that all required subtests have b
   "data": {
     "message": "Test completed",
     "status": "completed",
-    "ml_score": 0.55,
+    "ml_status": "processing",
+    "ml_job_id": "abc-123-def-456",
     "uploaded_count": 1,
     "expected_count": 1,
-    "missing": [],
-    "group_completed": true,
-    "group_overall_score": 0.68
+    "missing": []
   }
 }
 ```
+
+The `group_overall_score` is computed asynchronously after all three tests complete. Poll `GET /api/groups/<group_id>` to check when `ml_status` becomes `"completed"` with `overall_score`.
 
 **Example error response** `400` (missing uploads):
 
@@ -1257,6 +1294,40 @@ Mark a test as completed. The server validates that all required subtests have b
 | `401` | `{"error": "..."}` |
 | `403` | `{"error": "Forbidden"}` |
 | `404` | `{"error": "Test not found"}` |
+
+---
+
+### `POST /api/tests/<test_id>/reset`
+
+Reset a test session by deleting all uploaded files and inputs, and setting the status back to pending. Also cancels any pending ML inference job.
+
+**Auth required**: JWT (Mobile App) **or** `X-Device-API-Key` (ESP32)
+
+**Request body**: None
+
+**Note**: Cannot reset a test if its group is already completed.
+
+**Example response** `200`:
+
+```json
+{
+  "success": true,
+  "data": {
+    "message": "Test reset successfully",
+    "status": "pending"
+  }
+}
+```
+
+**Error responses**:
+
+| Status | Body |
+|--------|------|
+| `400` | Test is not resetable (group is completed) |
+| `401` | `{"error": "..."}` |
+| `403` | `{"error": "Forbidden"}` |
+| `404` | `{"error": "Test not found"}` |
+| `409` | `{"error": "Cannot reset test in a completed group..."}` |
 
 ---
 
@@ -1594,6 +1665,7 @@ Simple liveness check.
 | `POST /api/tests/<id>/drawings` | Mobile | JWT | `Authorization: Bearer <token>` |
 | `POST /api/tests/<id>/voice` | Mobile | JWT | `Authorization: Bearer <token>` |
 | `POST /api/tests/<id>/complete` | Mobile **or** ESP32 | JWT or Production key | `Authorization: Bearer <token>` or `X-Device-API-Key: sk_live_...` |
+| `POST /api/tests/<id>/reset` | Mobile **or** ESP32 | JWT or Production key | `Authorization: Bearer <token>` or `X-Device-API-Key: sk_live_...` |
 | `POST /api/esp32-devices/pair` | Mobile | JWT | `Authorization: Bearer <token>` |
 | `GET /api/esp32-devices` | Mobile | JWT | `Authorization: Bearer <token>` |
 | `DELETE /api/esp32-devices/<id>` | Mobile | JWT | `Authorization: Bearer <token>` |
@@ -1608,12 +1680,32 @@ Simple liveness check.
 
 | Status | Meaning | Body |
 |--------|---------|------|
+| `202` | Accepted (async processing started) | `{"success": true, "data": {...}}` |
 | `400` | Bad request / validation error | `{"error": "..."}` or `{"success": false, "error": "..."}` |
 | `401` | Unauthenticated | `{"error": "..."}` |
 | `403` | Forbidden (wrong user) | `{"error": "Forbidden"}` |
 | `404` | Not found | `{"error": "..."}` |
 | `409` | Conflict | `{"error": "..."}` |
 | `500` | Internal server error | `{"error": "Internal server error"}` or `{"success": false, "error": "..."}` |
+
+---
+
+## ML Inference Status Values
+
+The `ml_status` field indicates the state of asynchronous ML inference:
+
+| Value | Description |
+|-------|-------------|
+| `null` | Test not yet completed, or inference not started |
+| `processing` | Inference job is queued or running |
+| `completed` | Inference finished successfully — `ml_score` is available |
+| `failed` | Inference failed — check server logs |
+
+**Client polling workflow**:
+
+1. Call `POST /api/tests/<test_id>/complete` → receive `202` with `ml_status: "processing"`
+2. Poll `GET /api/tests/<test_id>` until `ml_status` is `"completed"` or `"failed"`
+3. When all 3 tests in a group are complete, poll `GET /api/groups/<group_id>` for `ml_status: "completed"` with `overall_score`
 
 ---
 

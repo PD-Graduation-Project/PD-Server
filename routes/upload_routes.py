@@ -2,7 +2,10 @@ from datetime import datetime, timezone
 
 from flask import Blueprint, g, jsonify, request
 from loguru import logger
+from redis import Redis
+from rq import Queue
 
+from config import Config
 from middleware.authenticate import authenticate
 from middleware.authenticate_esp32 import authenticate_jwt_or_esp32
 from models.database import db
@@ -24,6 +27,11 @@ from utils.storage import (
 )
 
 upload_bp = Blueprint("upload", __name__, url_prefix="/api/tests")
+
+
+def get_ml_queue():
+    """Get the RQ queue for ML inference jobs."""
+    return Queue("ml", connection=Redis.from_url(Config.REDIS_URL))
 
 
 @upload_bp.route("/<int:test_id>/tremor", methods=["POST"])
@@ -439,49 +447,23 @@ def complete_test(test_id):
     test_session.status = "completed"
     test_session.completed_at = datetime.now(timezone.utc)
 
-    ml_score = None
-    if test_session.test_type == "tremor":
-        from ml.predictor import predict_tremor
+    from ml.tasks import run_inference
 
-        ml_score = predict_tremor(test_session.id)
-    elif test_session.test_type == "drawing":
-        from ml.predictor import predict_drawing
-
-        ml_score = predict_drawing(test_session.id)
-    elif test_session.test_type == "voice":
-        from ml.predictor import predict_voice
-
-        ml_score = predict_voice(test_session.id)
-
-    test_session.ml_score = ml_score
+    test_session.ml_status = "processing"
     db.session.commit()
 
-    # Check if all three tests in the group are now completed
-    group_overall_score = None
-    if test_session.group_id:
-        group = db.session.get(TestGroup, test_session.group_id)
-        if group and group.status != "completed":
-            group_tests = TestSession.query.filter_by(group_id=group.id).all()
-            type_to_score = {t.test_type: t.ml_score for t in group_tests}
-            required = {"tremor", "drawing", "voice"}
-
-            all_done = required == set(type_to_score.keys()) and all(
-                t.status == "completed" for t in group_tests
-            )
-
-            if all_done:
-                from ml.overall_model import predict_overall
-
-                group_overall_score = predict_overall(
-                    tremor_score=type_to_score["tremor"],
-                    drawing_score=type_to_score["drawing"],
-                    voice_score=type_to_score["voice"],
-                    user_id=test_session.user_id,
-                )
-                group.overall_score = group_overall_score
-                group.status = "completed"
-                group.completed_at = datetime.now(timezone.utc)
-                db.session.commit()
+    try:
+        queue = get_ml_queue()
+        job = queue.enqueue(run_inference, test_session.id, job_timeout="5m")
+        test_session.ml_job_id = job.id
+        db.session.commit()
+    except Exception:
+        logger.exception(
+            f"Failed to enqueue ML inference for session {test_session.id}"
+        )
+        test_session.ml_status = "failed"
+        test_session.ml_job_id = None
+        db.session.commit()
 
     return (
         jsonify(
@@ -490,16 +472,15 @@ def complete_test(test_id):
                 "data": {
                     "message": "Test completed",
                     "status": "completed",
-                    "ml_score": ml_score,
+                    "ml_status": "processing",
+                    "ml_job_id": test_session.ml_job_id,
                     "uploaded_count": uploaded_count,
                     "expected_count": expected_count,
                     "missing": missing,
-                    "group_completed": group_overall_score is not None,
-                    "group_overall_score": group_overall_score,
                 },
             }
         ),
-        200,
+        202,
     )
 
 
@@ -545,9 +526,21 @@ def reset_test(test_id):
             delete_file(inp.file_path)
         db.session.delete(inp)
 
+    # Cancel any pending ML job
+    if test_session.ml_job_id:
+        try:
+            queue = get_ml_queue()
+            job = queue.fetch_job(test_session.ml_job_id)
+            if job:
+                job.cancel()
+        except Exception as e:
+            logger.warning(f"Failed to cancel job {test_session.ml_job_id}: {e}")
+
     # Reset session state
     test_session.status = "pending"
     test_session.ml_score = None
+    test_session.ml_status = None
+    test_session.ml_job_id = None
     test_session.completed_at = None
 
     # Reset group state if applicable
@@ -557,6 +550,8 @@ def reset_test(test_id):
             group.status = "in_progress"
             group.overall_score = None
             group.completed_at = None
+            group.ml_status = None
+            group.ml_job_id = None
 
     db.session.commit()
 

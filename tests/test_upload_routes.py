@@ -613,19 +613,21 @@ class TestCompleteTest:
             f"/api/tests/{in_progress_voice_session.id}/complete",
             headers=auth_headers,
         )
-        assert response.status_code == 200
+        assert response.status_code == 202
         result = response.get_json()
         assert result["success"] is True
         assert result["data"]["status"] == "completed"
-        assert "ml_score" in result["data"]
-        assert result["data"]["ml_score"] is not None
-        assert 0.0 <= result["data"]["ml_score"] <= 1.0
+        assert "ml_status" in result["data"]
+        assert result["data"]["ml_status"] == "processing"
+        assert "ml_job_id" in result["data"]
+        assert result["data"]["ml_job_id"] == "test-job-id"
 
         with app.app_context():
             from models.test_models import TestSession
 
             session = db.session.get(TestSession, in_progress_voice_session.id)
-            assert session.ml_score is not None
+            assert session.ml_status == "processing"
+            assert session.ml_job_id == "test-job-id"
 
     def test_complete_test_already_completed(
         self, app, client, auth_headers, test_user, clean_test_data
@@ -759,31 +761,26 @@ class TestCompleteTest:
             headers=auth_headers,
         )
         # This depends on implementation - currently it will complete since no files are required
-        assert response.status_code == 200
+        assert response.status_code == 202
         result = response.get_json()
         assert result["data"]["status"] == "completed"
-        # ML model still runs and returns a score even with no data
-        assert "ml_score" in result["data"]
+        # ML job is enqueued asynchronously - ml_status will be "processing"
+        assert "ml_status" in result["data"]
 
-    # Test 5: ML model exception handling - currently returns 500 (no graceful handling)
-    def test_complete_test_ml_exception_returns_500(
+    def test_complete_test_ml_exception_returns_202(
         self, app, client, auth_headers, in_progress_drawing_complete_session
     ):
-        """Test that ML model exceptions cause 500 error (documents current behavior)."""
-        # Mock the predict_drawing function to raise an exception
-        from unittest.mock import patch
-
-        import pytest
-
-        with patch("ml.predictor.predict_drawing") as mock_predict:
-            mock_predict.side_effect = Exception("ML model failed")
-
-            # Currently the exception propagates and returns 500
-            # In the future, this could be improved to return 500 with a user-friendly error
-            with pytest.raises(Exception, match="ML model failed"):
-                client.post(
-                    f"/api/tests/{in_progress_drawing_complete_session.id}/complete",
-                    headers=auth_headers,
-                )
-            # Note: When Flask's test client raises an exception, pytest catches it
-            # In production, this would be a 500 error
+        """
+        Test that ML model exceptions are handled gracefully.
+        The request returns 202 immediately, and the exception is caught
+        in the RQ worker which sets ml_status to 'failed'.
+        """
+        response = client.post(
+            f"/api/tests/{in_progress_drawing_complete_session.id}/complete",
+            headers=auth_headers,
+        )
+        assert response.status_code == 202
+        result = response.get_json()
+        assert result["success"] is True
+        assert result["data"]["status"] == "completed"
+        assert result["data"]["ml_status"] == "processing"

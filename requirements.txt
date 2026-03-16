@@ -9,4 +9,5 @@ PyJWT==2.8.0
 Werkzeug==2.3.7
 marshmallow
 redis
+rq
 loguru

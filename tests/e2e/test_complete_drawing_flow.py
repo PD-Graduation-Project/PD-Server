@@ -112,14 +112,14 @@ class TestCompleteDrawingFlow:
             headers={"Authorization": f"Bearer {tokens['access_token']}"},
         )
         assert (
-            complete_response.status_code == 200
+            complete_response.status_code == 202
         ), f"Complete failed: {complete_response.get_json()}"
 
         complete_data = complete_response.get_json()["data"]
         assert complete_data["status"] == "completed"
-        assert "ml_score" in complete_data
-        assert complete_data["ml_score"] is not None
-        assert 0.0 <= complete_data["ml_score"] <= 1.0
+        assert "ml_status" in complete_data
+        assert complete_data["ml_status"] == "processing"
+        assert "ml_job_id" in complete_data
 
         # ===== STEP 5: Verify Results =====
         get_response = e2e_client.get(
@@ -130,7 +130,7 @@ class TestCompleteDrawingFlow:
 
         final_data = get_response.get_json()["data"]
         assert final_data["status"] == "completed"
-        assert final_data["ml_score"] == complete_data["ml_score"]
+        assert final_data["ml_status"] == "processing"
 
     def test_drawing_flow_with_both_images_together(
         self,
@@ -192,8 +192,8 @@ class TestCompleteDrawingFlow:
             f"/api/tests/{test_id}/complete",
             headers={"Authorization": f"Bearer {tokens['access_token']}"},
         )
-        assert complete_response.status_code == 200
-        assert complete_response.get_json()["data"]["ml_score"] is not None
+        assert complete_response.status_code == 202
+        assert complete_response.get_json()["data"]["ml_status"] == "processing"
 
     def test_drawing_flow_missing_image(
         self,

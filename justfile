@@ -13,6 +13,10 @@ tunnel:
 dev:
     flask --app app run --debug --host 0.0.0.0 --port 5000
 
+# Run the RQ worker for ML inference (run in separate terminal)
+rq-worker:
+    rq worker ml
+
 # Database migrations
 migrate:
     flask db upgrade

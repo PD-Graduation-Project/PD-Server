@@ -226,14 +226,14 @@ class TestCompleteTremorFlow:
             f"/api/tests/{test_id}/complete", headers=esp32_headers
         )
         assert (
-            complete_response.status_code == 200
+            complete_response.status_code == 202
         ), f"Complete failed: {complete_response.get_json()}"
 
         complete_data = complete_response.get_json()["data"]
         assert complete_data["status"] == "completed"
-        assert "ml_score" in complete_data
-        assert complete_data["ml_score"] is not None
-        assert 0.0 <= complete_data["ml_score"] <= 1.0
+        assert "ml_status" in complete_data
+        assert complete_data["ml_status"] == "processing"
+        assert "ml_job_id" in complete_data
 
         # 7. Mobile Verifies Results
         get_response = e2e_client.get(f"/api/tests/{test_id}", headers=auth_headers)
@@ -241,7 +241,7 @@ class TestCompleteTremorFlow:
 
         final_data = get_response.get_json()["data"]
         assert final_data["status"] == "completed"
-        assert final_data["ml_score"] == complete_data["ml_score"]
+        assert final_data["ml_status"] == "processing"
 
         # Verify test appears in list
         list_response = e2e_client.get("/api/tests", headers=auth_headers)
@@ -342,11 +342,11 @@ class TestCompleteTremorFlow:
             f"/api/tests/{test_id}/complete",
             headers={"X-Device-API-Key": esp32_api_key},
         )
-        assert complete_response.status_code == 200
+        assert complete_response.status_code == 202
 
         complete_data = complete_response.get_json()["data"]
         assert complete_data["status"] == "completed"
-        assert complete_data["ml_score"] is not None
+        assert complete_data["ml_status"] == "processing"
 
     def test_tremor_flow_partial_upload_then_complete(
         self,

@@ -21,6 +21,10 @@ class TestGroup(db.Model):
     # Set once all three tests are completed, via predict_overall()
     overall_score = db.Column(db.Float, nullable=True)
 
+    # ML inference status for the entire group
+    ml_status = db.Column(db.String(20), nullable=True)  # processing, completed, failed
+    ml_job_id = db.Column(db.String(50), nullable=True)  # RQ job ID
+
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     completed_at = db.Column(db.DateTime, nullable=True)
 
@@ -60,6 +64,8 @@ class TestSession(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     completed_at = db.Column(db.DateTime, nullable=True)
     ml_score = db.Column(db.Float, nullable=True)
+    ml_status = db.Column(db.String(20), nullable=True)  # processing, completed, failed
+    ml_job_id = db.Column(db.String(50), nullable=True)  # RQ job ID
 
     user_id_fk = db.relationship("User", backref="test_sessions")
 

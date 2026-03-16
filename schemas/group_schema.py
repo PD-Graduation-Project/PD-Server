@@ -16,6 +16,8 @@ class GroupSchema(Schema):
     user_id = fields.Integer(dump_only=True)
     status = fields.String(dump_only=True)
     overall_score = fields.Float(dump_only=True, allow_none=True)
+    ml_status = fields.String(dump_only=True, allow_none=True)
+    ml_job_id = fields.String(dump_only=True, allow_none=True)
     created_at = fields.DateTime(dump_only=True)
     completed_at = fields.DateTime(dump_only=True, allow_none=True)
     tests = fields.List(fields.Nested(TestSessionSchema), dump_only=True)
