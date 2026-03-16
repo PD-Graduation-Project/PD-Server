@@ -15,6 +15,8 @@ import sys
 import tempfile
 from pathlib import Path
 
+from loguru import logger
+
 # ---------------------------------------------------------------------------
 # Make _FINAL_SCRIPTS importable (models/, utils/, weights/ are relative to it)
 # ---------------------------------------------------------------------------
@@ -76,12 +78,18 @@ def predict_drawing(test_session_id: int) -> float:
     if not inputs:
         raise ValueError(f"No drawing inputs found for session {test_session_id}")
 
+    logger.info(
+        f"Predicting drawing for session {test_session_id}, {len(inputs)} inputs"
+    )
     probs = []
     for inp in inputs:
         prob = _predict(inp.file_path)
+        logger.info(f"Drawing input {inp.file_path} -> prob: {prob}")
         probs.append(prob)
 
-    return sum(probs) / len(probs)
+    avg = sum(probs) / len(probs)
+    logger.info(f"Drawing prediction result: {avg}")
+    return avg
 
 
 # ---------------------------------------------------------------------------
@@ -178,6 +186,9 @@ def predict_tremor(test_session_id: int) -> float:
                 movement=movement,
                 handedness=handedness,
             )
+            logger.info(
+                f"Tremor subtest {subtest} (movement {movement}) -> prob: {prob}"
+            )
             probs.append(prob)
     finally:
         shutil.rmtree(tmpdir, ignore_errors=True)
@@ -230,6 +241,8 @@ def predict_voice(test_session_id: int) -> float:
     probs = []
     for inp in inputs:
         prob = _predict(inp.file_path, gender=gender)
+
+        logger.info(f"Voice Test Input {inp.file_path} -> prob: {prob}")
         probs.append(prob)
 
     return sum(probs) / len(probs)
@@ -292,4 +305,6 @@ def predict_questionnaire(user_id: int) -> float:
         questions,
     ]
 
-    return _predict(x)
+    score = _predict(x)
+    logger.info(f"Questionnaire for User {user_id} -> prob: {score}")
+    return score
