@@ -47,11 +47,11 @@ def run_inference(session_id: int) -> dict:
             test_type = session.test_type
 
             if test_type == "tremor":
-                ml_score = predict_tremor(session_id)
+                ml_score = float(predict_tremor(session_id))
             elif test_type == "drawing":
-                ml_score = predict_drawing(session_id)
+                ml_score = float(predict_drawing(session_id))
             elif test_type == "voice":
-                ml_score = predict_voice(session_id)
+                ml_score = float(predict_voice(session_id))
             else:
                 logger.warning(
                     f"Unknown test type {test_type} for session {session_id}"
