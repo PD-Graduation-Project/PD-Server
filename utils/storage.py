@@ -213,17 +213,16 @@ def save_imu_data(
     gy = imu_data.get("gy", [])
     gz = imu_data.get("gz", [])
 
-    num_samples = len(ax)
-
     if not (len(ay) == len(ax) == len(az) == len(gx) == len(gy) == len(gz)):
         raise ValueError("All IMU arrays must have the same length")
 
-    # Submit the write to the background thread pool
-    _imu_write_pool.submit(_write_imu_data, file_path, imu_data, sample_rate)
+    # Write synchronously to ensure file exists before returning
+    # This prevents race conditions where /complete is called before files are written
+    _write_imu_data(file_path, imu_data, sample_rate)
 
-    # Return immediately with estimated size
-    estimated_size = num_samples * _BYTES_PER_ROW
-    return str(file_path), estimated_size
+    # Return with actual size
+    actual_size = file_path.stat().st_size if file_path.exists() else 0
+    return str(file_path), actual_size
 
 
 def cleanup_test_directory(test_type: str, test_id: int) -> bool:
