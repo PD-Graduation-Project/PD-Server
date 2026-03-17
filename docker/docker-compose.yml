@@ -1,0 +1,90 @@
+services:
+  nginx:
+    build:
+      context: ./nginx
+      dockerfile: Dockerfile
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on:
+      - app
+    volumes:
+      - uploads:/home/ali/Coding/grad_project/PD-Server/uploads
+    restart: unless-stopped
+
+  app:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.app
+    env_file:
+      - .env.docker
+    environment:
+      - POSTGRES_HOST=postgres
+      - POSTGRES_USER=pduser
+      - POSTGRES_PASSWORD=pdpassword
+      - POSTGRES_DB=pdserver
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    volumes:
+      - uploads:/home/ali/Coding/grad_project/PD-Server/uploads
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  worker:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.worker
+    env_file:
+      - .env.docker
+    environment:
+      - POSTGRES_HOST=postgres
+      - POSTGRES_USER=pduser
+      - POSTGRES_PASSWORD=pdpassword
+      - POSTGRES_DB=pdserver
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    volumes:
+      - uploads:/home/ali/Coding/grad_project/PD-Server/uploads
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: pduser
+      POSTGRES_PASSWORD: pdpassword
+      POSTGRES_DB: pdserver
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pduser -d pdserver"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:
+  uploads:

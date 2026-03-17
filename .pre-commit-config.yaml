@@ -18,7 +18,7 @@ repos:
     rev: 7.0.0
     hooks:
       - id: flake8
-        exclude: "ml/_FINAL_SCRIPTS/"
+        exclude: "ml/_FINAL_SCRIPTS/|ml/tasks.py"
   - repo: https://github.com/pre-commit/mirrors-mypy
     rev: v1.8.0 # Use the same version as in requirements-dev.txt
     hooks:

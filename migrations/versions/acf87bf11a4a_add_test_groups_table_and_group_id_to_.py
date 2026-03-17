@@ -42,10 +42,6 @@ def upgrade():
         batch_op.alter_column(
             "api_key", existing_type=sa.VARCHAR(length=255), nullable=True
         )
-        batch_op.create_index("idx_esp32_api_key", ["api_key"], unique=False)
-        batch_op.create_index(
-            "idx_esp32_factory_api_key", ["factory_api_key"], unique=False
-        )
 
     with op.batch_alter_table("test_sessions", schema=None) as batch_op:
         batch_op.add_column(sa.Column("group_id", sa.Integer(), nullable=True))
@@ -65,8 +61,6 @@ def downgrade():
         batch_op.drop_column("group_id")
 
     with op.batch_alter_table("esp32_devices", schema=None) as batch_op:
-        batch_op.drop_index("idx_esp32_factory_api_key")
-        batch_op.drop_index("idx_esp32_api_key")
         batch_op.alter_column(
             "api_key", existing_type=sa.VARCHAR(length=255), nullable=False
         )

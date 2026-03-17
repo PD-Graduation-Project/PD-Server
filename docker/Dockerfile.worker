@@ -1,0 +1,56 @@
+FROM python:3.11-slim
+
+WORKDIR /home/ali/Coding/grad_project/PD-Server
+
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    libpq-dev \
+    libsndfile1 \
+    ffmpeg \
+    libc6-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+RUN pip install --no-cache-dir \
+    torch==2.1.0 \
+    torchvision==0.16.0 \
+    albumentations==1.3.1 \
+    pycatch22 \
+    joblib==1.3.2 \
+    scikit-learn==1.3.2 \
+    pillow==10.1.0 \
+    numpy==1.24.3
+
+RUN pip install --no-cache-dir \
+    librosa \
+    gdown \
+    praat-parselmouth==0.4.7
+
+RUN pip install --no-cache-dir \
+    audioread \
+    soundfile \
+    soxr \
+    numba \
+    msgpack \
+    pooch \
+    decorator \
+    lazy-loader \
+    stopit \
+    pytz \
+    pyyaml \
+    threadpoolctl
+
+# Download weights from Google Drive (only if not already present)
+RUN mkdir -p ml/_FINAL_SCRIPTS/weights && \
+    if [ -z "$(ls -A ml/_FINAL_SCRIPTS/weights/*.pth 2>/dev/null)" ]; then \
+        gdown --folder 1Svo25SRx7RZ7MW8m1abZerdv7ZGypyHT -O ml/_FINAL_SCRIPTS/weights; \
+    fi
+
+COPY . .
+
+CMD ["rq", "worker", "ml"]
