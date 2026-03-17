@@ -11,6 +11,7 @@ from loguru import logger
 from config import Config
 from models.database import db
 from models.test_models import TestGroup, TestSession
+from models.user import User
 
 
 def run_inference(session_id: int) -> dict:

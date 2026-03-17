@@ -11,3 +11,4 @@ marshmallow
 redis
 rq
 loguru
+gunicorn

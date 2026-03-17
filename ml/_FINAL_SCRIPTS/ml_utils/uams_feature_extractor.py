@@ -8,12 +8,8 @@ import statistics
 import warnings
 
 import librosa
-import matplotlib.pyplot as plt
 import numpy as np
-import pandas as pd
 import parselmouth
-import scipy.signal
-import scipy.stats
 from parselmouth.praat import call
 
 warnings.filterwarnings("ignore")
