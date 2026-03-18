@@ -11,6 +11,7 @@ from middleware.authenticate_esp32 import authenticate_jwt_or_esp32
 from models.database import db
 from models.test_models import TestGroup, TestInput, TestSession
 from models.user import User
+from utils.esp32_connection_manager import connection_manager
 from utils.storage import (
     delete_file,
     generate_drawing_filename,
@@ -491,6 +492,7 @@ def reset_test(test_id):
     Reset a test session by deleting all uploaded files and inputs,
     and setting the status back to pending.
 
+    Optionally accepts a new config to update the test configuration.
     Only allowed if the test's group is NOT completed.
     Auth: JWT user (owner) or paired ESP32 device.
     """
@@ -519,6 +521,28 @@ def reset_test(test_id):
                 409,
             )
 
+    # Get optional new config from request body
+    new_config = None
+    json_body = request.get_json(silent=True)
+    if json_body and "config" in json_body:
+        new_config = json_body["config"]
+        if not isinstance(new_config, dict):
+            return jsonify({"error": "config must be an object"}), 400
+        valid_keys = {"0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10"}
+        for key in new_config:
+            if key not in valid_keys:
+                return (
+                    jsonify(
+                        {"error": f"Invalid config key: {key}. Must be one of 0-10"}
+                    ),
+                    400,
+                )
+            if not isinstance(new_config[key], bool):
+                return (
+                    jsonify({"error": f"Config value for {key} must be boolean"}),
+                    400,
+                )
+
     # Delete uploaded files from disk
     inputs = TestInput.query.filter_by(test_session_id=test_id).all()
     for inp in inputs:
@@ -543,6 +567,10 @@ def reset_test(test_id):
     test_session.ml_job_id = None
     test_session.completed_at = None
 
+    # Update config if new config provided
+    if new_config is not None:
+        test_session.config = new_config
+
     # Reset group state if applicable
     if test_session.group_id:
         group = db.session.get(TestGroup, test_session.group_id)
@@ -566,3 +594,74 @@ def reset_test(test_id):
         ),
         200,
     )
+
+
+@upload_bp.route("/<int:test_id>/start", methods=["POST"])
+@authenticate_jwt_or_esp32
+def start_test(test_id):
+    """
+    Send a test_started event to the paired ESP32 device for a tremor test.
+    Use this to notify the device to start collecting data.
+
+    Auth: JWT user (owner) or paired ESP32 device.
+    """
+    current_user = db.session.get(User, g.user_id)
+    if not current_user:
+        return jsonify({"error": "User not found"}), 404
+
+    test_session = db.session.get(TestSession, test_id)
+    if not test_session:
+        return jsonify({"error": "Test not found"}), 404
+
+    if test_session.user_id != current_user.id:
+        return jsonify({"error": "Forbidden"}), 403
+
+    if test_session.test_type != "tremor":
+        return (
+            jsonify({"error": "test_started event is only supported for tremor tests"}),
+            400,
+        )
+
+    if test_session.device_source != "esp32":
+        return (
+            jsonify(
+                {"error": "test_started event is only supported for ESP32 device tests"}
+            ),
+            400,
+        )
+
+    try:
+        success = connection_manager.send_event(
+            current_user.id,
+            "test_started",
+            {
+                "test_id": test_session.id,
+                "test_type": test_session.test_type,
+                "config": test_session.config,
+            },
+        )
+        if success:
+            logger.info(
+                f"test_started event sent for test {test_id} to user {current_user.id}"
+            )
+            return (
+                jsonify(
+                    {
+                        "success": True,
+                        "data": {"message": "test_started event sent"},
+                    }
+                ),
+                200,
+            )
+        else:
+            return (
+                jsonify(
+                    {
+                        "error": "ESP32 device is not connected. Make sure the device is powered on and connected."
+                    }
+                ),
+                503,
+            )
+    except Exception as e:
+        logger.error(f"Exception sending test_started event for test {test_id}: {e}")
+        return jsonify({"error": "Failed to send event to device"}), 500
