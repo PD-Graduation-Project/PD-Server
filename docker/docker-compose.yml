@@ -9,7 +9,7 @@ services:
     depends_on:
       - app
     volumes:
-      - uploads:/home/ali/Coding/grad_project/PD-Server/uploads
+      - uploads:/app/uploads
     restart: unless-stopped
 
   app:
@@ -29,7 +29,7 @@ services:
       redis:
         condition: service_started
     volumes:
-      - uploads:/home/ali/Coding/grad_project/PD-Server/uploads
+      - uploads:/app/uploads
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
@@ -54,7 +54,19 @@ services:
       redis:
         condition: service_started
     volumes:
-      - uploads:/home/ali/Coding/grad_project/PD-Server/uploads
+      - uploads:/app/uploads
+      - weights:/app/ml/_FINAL_SCRIPTS/weights
+    # Download weights into the named volume on first start, then launch the worker
+    command: >
+      sh -c "
+        if [ -z \"$$(ls -A /app/ml/_FINAL_SCRIPTS/weights/*.pth 2>/dev/null)\" ]; then
+          echo 'Downloading model weights...';
+          gdown --folder 1Svo25SRx7RZ7MW8m1abZerdv7ZGypyHT -O /app/ml/_FINAL_SCRIPTS/weights;
+        else
+          echo 'Weights already present, skipping download.';
+        fi &&
+        rq worker ml
+      "
     restart: unless-stopped
 
   postgres:
@@ -88,3 +100,4 @@ volumes:
   postgres_data:
   redis_data:
   uploads:
+  weights:
