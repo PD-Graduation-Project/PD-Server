@@ -1,6 +1,7 @@
 from functools import wraps
 
 from flask import g, jsonify, request
+from loguru import logger
 
 from models.database import db
 from models.test_models import ESP32Device
@@ -18,9 +19,11 @@ def authenticate_esp32_factory(fn):
         factory_key = request.headers.get("X-Device-API-Key")
 
         if not factory_key:
+            logger.error("No Factory Key in X-Device-API-Key")
             return jsonify({"error": "X-Device-API-Key header required"}), 401
 
         if not factory_key.startswith("fk_"):
+            logger.error("Invalid Factory Key in X-Device-API-Key")
             return jsonify({"error": "Invalid factory key format"}), 401
 
         g.factory_key = factory_key
