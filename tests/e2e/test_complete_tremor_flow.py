@@ -5,16 +5,18 @@ Tests the complete tremor test workflow:
 1. User registration/login
 2. Device pairing
 3. Create tremor test
-4. ESP32 registration
-5. ESP32 uploads tremor data
-6. ESP32 completes test
-7. Mobile polls and verifies ML score
+4. Start test (notify ESP32)
+5. ESP32 registration
+6. ESP32 uploads tremor data
+7. ESP32 completes test
+8. Mobile polls and verifies ML score
 """
 
 import io
 import secrets
 
 from tests.e2e.conftest import E2ETestDataGenerator
+from utils import esp32_connection_manager as cm_module
 
 
 class TestCompleteTremorFlow:
@@ -37,10 +39,16 @@ class TestCompleteTremorFlow:
         e2e_app,
         e2e_user,
         e2e_esp32_unregistered,
+        monkeypatch,
     ):
         """
         Execute the complete tremor test flow.
         """
+        # Mock send_event to simulate connected device
+        monkeypatch.setattr(
+            cm_module.connection_manager, "send_event", lambda *a, **kw: True
+        )
+
         # 1. User Login
         login_response = e2e_client.post(
             "/api/auth/login",
@@ -109,6 +117,13 @@ class TestCompleteTremorFlow:
         test_data = create_response.get_json()["data"]
         test_id = test_data["id"]
         assert test_data["status"] == "pending"
+
+        # 4b. Start test to notify ESP32
+        start_response = e2e_client.post(
+            f"/api/tests/{test_id}/start",
+            headers=auth_headers,
+        )
+        assert start_response.status_code == 200
 
         esp32_headers = {
             "X-Device-API-Key": production_key,
@@ -255,10 +270,16 @@ class TestCompleteTremorFlow:
         e2e_client,
         e2e_app,
         e2e_user,
+        monkeypatch,
     ):
         """
         Test tremor flow with only one subtest enabled.
         """
+        # Mock send_event to simulate connected device
+        monkeypatch.setattr(
+            cm_module.connection_manager, "send_event", lambda *a, **kw: True
+        )
+
         # Login
         login_response = e2e_client.post(
             "/api/auth/login",
@@ -301,6 +322,13 @@ class TestCompleteTremorFlow:
         )
         assert create_response.status_code == 201
         test_id = create_response.get_json()["data"]["id"]
+
+        # Start test to notify ESP32
+        start_response = e2e_client.post(
+            f"/api/tests/{test_id}/start",
+            headers=auth_headers_single,
+        )
+        assert start_response.status_code == 200
 
         # Upload both hands for step 0
         data_generator = E2ETestDataGenerator()
@@ -353,10 +381,16 @@ class TestCompleteTremorFlow:
         e2e_client,
         e2e_app,
         e2e_user,
+        monkeypatch,
     ):
         """
         Test that completing with partial uploads still works.
         """
+        # Mock send_event to simulate connected device
+        monkeypatch.setattr(
+            cm_module.connection_manager, "send_event", lambda *a, **kw: True
+        )
+
         # Login
         login_response = e2e_client.post(
             "/api/auth/login",
@@ -403,6 +437,13 @@ class TestCompleteTremorFlow:
         )
         assert create_response.status_code == 201
         test_id = create_response.get_json()["data"]["id"]
+
+        # Start test to notify ESP32
+        start_response = e2e_client.post(
+            f"/api/tests/{test_id}/start",
+            headers=partial_auth_headers,
+        )
+        assert start_response.status_code == 200
 
         # Upload only ONE subtest
         data_generator = E2ETestDataGenerator()

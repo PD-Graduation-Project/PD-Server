@@ -1,7 +1,6 @@
 from typing import Any, cast
 
 from flask import Blueprint, g, jsonify, request
-from loguru import logger
 from sqlalchemy.orm import selectinload
 
 from middleware.authenticate import authenticate
@@ -9,7 +8,6 @@ from models.database import db
 from models.test_models import TestGroup, TestSession
 from models.user import User
 from schemas.test_schema import CreateTestSchema, TestListQuerySchema, TestSessionSchema
-from utils.esp32_connection_manager import connection_manager
 from utils.validation import get_json_body, get_query_params
 
 test_bp = Blueprint("test", __name__, url_prefix="/api/tests")
@@ -79,34 +77,6 @@ def create_test():
         group.status = "in_progress"
 
     db.session.commit()
-
-    # If tremor test with ESP32, send SSE event to paired device
-    if test_type == "tremor" and device_source == "esp32":
-        logger.info(
-            f"[TEST ROUTE] Sending test_started event for test {test_session.id} to user {current_user.id}"
-        )
-        try:
-            success = connection_manager.send_event(
-                current_user.id,
-                "test_started",
-                {
-                    "test_id": test_session.id,
-                    "test_type": test_type,
-                    "config": config,
-                },
-            )
-            if success:
-                logger.info(
-                    f"[TEST ROUTE] test_started event sent successfully to user {current_user.id}"
-                )
-            else:
-                logger.warning(
-                    f"[TEST ROUTE] Failed to send test_started event to user {current_user.id}"
-                )
-        except Exception as e:
-            logger.error(
-                f"[TEST ROUTE] Exception while sending test_started event to user {current_user.id}: {e}"
-            )
 
     return (
         jsonify(

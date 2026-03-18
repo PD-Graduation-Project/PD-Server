@@ -753,7 +753,7 @@ GET /api/groups/3
 
 ### `POST /api/tests`
 
-Create a new test session inside an existing group. For tremor tests with `device_source = "esp32"`, this automatically fires a `test_started` SSE event to the user's connected ESP32 device.
+Create a new test session inside an existing group.
 
 **Auth required**: Yes (JWT — Mobile App)
 
@@ -769,6 +769,7 @@ Create a new test session inside an existing group. For tremor tests with `devic
 **Notes**:
 - Each test type can appear **once** per group. A second attempt with the same `test_type` returns `409`.
 - Adding the first test to a group advances the group from `"pending"` to `"in_progress"`.
+- For tremor tests with ESP32, use `POST /api/tests/<id>/start` to notify the device to begin collecting data.
 
 **Example request** — tremor test via ESP32:
 
@@ -1303,9 +1304,27 @@ Reset a test session by deleting all uploaded files and inputs, and setting the 
 
 **Auth required**: JWT (Mobile App) **or** `X-Device-API-Key` (ESP32)
 
-**Request body**: None
+**Request body**: (optional)
 
-**Note**: Cannot reset a test if its group is already completed.
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `config` | object | No | For tremor tests: keys `"0"`–`"10"`, values `boolean`. Updates the test configuration. |
+
+**Notes**:
+- Cannot reset a test if its group is already completed.
+- For tremor tests with ESP32, use `POST /api/tests/<id>/start` to notify the device to begin collecting data after reset.
+
+**Example request** (with new config):
+
+```json
+{
+  "config": {
+    "0": true,
+    "1": true,
+    "5": true
+  }
+}
+```
 
 **Example response** `200`:
 
@@ -1323,11 +1342,58 @@ Reset a test session by deleting all uploaded files and inputs, and setting the 
 
 | Status | Body |
 |--------|------|
+| `400` | `{"error": "config must be an object"}` |
+| `400` | `{"error": "Invalid config key: ..."}` |
+| `400` | `{"error": "Config value for ... must be boolean"}` |
 | `400` | Test is not resetable (group is completed) |
 | `401` | `{"error": "..."}` |
 | `403` | `{"error": "Forbidden"}` |
 | `404` | `{"error": "Test not found"}` |
 | `409` | `{"error": "Cannot reset test in a completed group..."}` |
+
+---
+
+### `POST /api/tests/<test_id>/start`
+
+Send a `test_started` event to the paired ESP32 device for a tremor test. Use this to notify the device to begin collecting data.
+
+**Auth required**: JWT (Mobile App) **or** `X-Device-API-Key` (ESP32)
+
+**Request body**: None
+
+**Notes**:
+- Only valid for tremor tests with `device_source = "esp32"`.
+- Call this after creating a test or after resetting a test to notify the ESP32 to start collecting data.
+
+**Example response** `200`:
+
+```json
+{
+  "success": true,
+  "data": {
+    "message": "test_started event sent"
+  }
+}
+```
+
+**Example response** `503` (device not connected):
+
+```json
+{
+  "error": "ESP32 device is not connected. Make sure the device is powered on and connected."
+}
+```
+
+**Error responses**:
+
+| Status | Body |
+|--------|------|
+| `400` | `{"error": "test_started event is only supported for tremor tests"}` |
+| `400` | `{"error": "test_started event is only supported for ESP32 device tests"}` |
+| `401` | `{"error": "..."}` |
+| `403` | `{"error": "Forbidden"}` |
+| `404` | `{"error": "Test not found"}` |
+| `500` | `{"error": "Failed to send event to device"}` |
 
 ---
 
