@@ -1,15 +1,12 @@
-FROM nginx:latest
+# Use alpine variant — saves ~90 MB vs nginx:latest (Debian)
+FROM nginx:alpine
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    openssl \
-    && rm -rf /var/lib/apt/lists/*
-
-RUN mkdir -p /etc/nginx/ssl
-
-RUN openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
-    -keyout /etc/nginx/ssl/server.key \
-    -out /etc/nginx/ssl/server.crt \
-    -subj "/C=US/ST=State/L=City/O=Organization/CN=localhost"
+RUN apk add --no-cache openssl && \
+    mkdir -p /etc/nginx/ssl && \
+    openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+        -keyout /etc/nginx/ssl/server.key \
+        -out /etc/nginx/ssl/server.crt \
+        -subj "/C=US/ST=State/L=City/O=Organization/CN=localhost"
 
 COPY nginx.conf /etc/nginx/nginx.conf
 
