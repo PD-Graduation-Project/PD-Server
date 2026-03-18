@@ -12,6 +12,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     libpq-dev \
     postgresql-client \
+    libev-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python deps before copying app code (better layer caching)
@@ -27,4 +28,4 @@ RUN chmod +x /entrypoint.sh
 EXPOSE 5000
 
 ENTRYPOINT ["/entrypoint.sh"]
-CMD ["gunicorn", "--workers", "4", "--bind", "0.0.0.0:5000", "app:create_app()"]
+CMD ["gunicorn", "--workers", "4", "--worker-class", "gevent", "--bind", "0.0.0.0:5000", "app:create_app()"]

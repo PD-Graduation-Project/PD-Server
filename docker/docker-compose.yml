@@ -48,6 +48,7 @@ services:
       - POSTGRES_USER=pduser
       - POSTGRES_PASSWORD=pdpassword
       - POSTGRES_DB=pdserver
+      - GDRIVE_WEIGHTS_ID=1Svo25SRx7RZ7MW8m1abZerdv7ZGypyHT
     depends_on:
       postgres:
         condition: service_healthy
@@ -59,9 +60,10 @@ services:
     # Download weights into the named volume on first start, then launch the worker
     command: >
       sh -c "
-        if [ -z \"$$(ls -A /app/ml/_FINAL_SCRIPTS/weights/*.pth 2>/dev/null)\" ]; then
+        cd /app/ml/_FINAL_SCRIPTS &&
+        if [ -z \"$$(ls -A weights/*.pth 2>/dev/null)\" ]; then
           echo 'Downloading model weights...';
-          gdown --folder 1Svo25SRx7RZ7MW8m1abZerdv7ZGypyHT -O /app/ml/_FINAL_SCRIPTS/weights;
+          gdown \"$$GDRIVE_WEIGHTS_ID\" --folder -O weights;
         else
           echo 'Weights already present, skipping download.';
         fi &&
