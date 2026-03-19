@@ -57,6 +57,7 @@ services:
     volumes:
       - uploads:/app/uploads
       - weights:/app/ml/_FINAL_SCRIPTS/weights
+      - torch_cache:/root/.cache/torch/hub/checkpoints
     # Download weights into the named volume on first start, then launch the worker
     command: >
       sh -c "
@@ -67,7 +68,8 @@ services:
         else
           echo 'Weights already present, skipping download.';
         fi &&
-        rq worker ml
+        cd /app &&
+        PYTHONPATH=/app rq worker ml
       "
     restart: unless-stopped
 
@@ -103,3 +105,4 @@ volumes:
   redis_data:
   uploads:
   weights:
+  torch_cache:
