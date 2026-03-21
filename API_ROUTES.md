@@ -1509,7 +1509,7 @@ List all ESP32 devices currently paired to the authenticated user.
 
 ---
 
-### `DELETE /api/esp32-devices/<id>`
+### `DELETE /api/esp32-devices/<device_id>`
 
 Unpair an ESP32 device from the current user. The device's `user_id` and `name` are cleared; it can be re-paired by any user.
 
@@ -1519,12 +1519,12 @@ Unpair an ESP32 device from the current user. The device's `user_id` and `name` 
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `id` | integer | The database `id` from the list endpoint (not the `device_id` string) |
+| `device_id` | string | The `device_id` string (e.g., `ESP32-AABBCC`) from the device sticker |
 
 **Example request**:
 
 ```
-DELETE /api/esp32-devices/1
+DELETE /api/esp32-devices/ESP32-AABBCC
 ```
 
 **Example response** `200`:
@@ -1541,7 +1541,7 @@ DELETE /api/esp32-devices/1
 | Status | Body |
 |--------|------|
 | `401` | `{"error": "..."}` |
-| `404` | `{"error": "Device not found"}` — not found or belongs to a different user |
+| `404` | `{"error": "Device not found"}` — device not found or not paired to this user |
 
 ---
 
@@ -1734,7 +1734,7 @@ Simple liveness check.
 | `POST /api/tests/<id>/reset` | Mobile **or** ESP32 | JWT or Production key | `Authorization: Bearer <token>` or `X-Device-API-Key: sk_live_...` |
 | `POST /api/esp32-devices/pair` | Mobile | JWT | `Authorization: Bearer <token>` |
 | `GET /api/esp32-devices` | Mobile | JWT | `Authorization: Bearer <token>` |
-| `DELETE /api/esp32-devices/<id>` | Mobile | JWT | `Authorization: Bearer <token>` |
+| `DELETE /api/esp32-devices/<device_id>` | Mobile | JWT | `Authorization: Bearer <token>` |
 | `POST /api/esp32/register` | ESP32 | Factory key | `X-Device-API-Key: fk_...` |
 | `GET /api/esp32/stream` | ESP32 | Production key | `X-Device-API-Key: sk_live_...` |
 | `POST /api/esp32/heartbeat` | ESP32 | Production key | `X-Device-API-Key: sk_live_...` |

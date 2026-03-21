@@ -52,7 +52,10 @@ class TestSession(db.Model):
     # FK to the parent group — nullable so old rows and standalone tests still work
     # at the DB level, but the API enforces it for new POSTs.
     group_id = db.Column(
-        db.Integer, db.ForeignKey("test_groups.id"), nullable=True, index=True
+        db.Integer,
+        db.ForeignKey("test_groups.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
     )
 
     test_type = db.Column(db.String(20), nullable=False)  # tremor, drawing, voice
@@ -88,7 +91,9 @@ class TestInput(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     test_session_id = db.Column(
-        db.Integer, db.ForeignKey("test_sessions.id"), nullable=False
+        db.Integer,
+        db.ForeignKey("test_sessions.id", ondelete="CASCADE"),
+        nullable=False,
     )
     input_type = db.Column(db.String(30), nullable=False)
     file_path = db.Column(db.String(500), nullable=False)

@@ -30,6 +30,7 @@ services:
         condition: service_started
     volumes:
       - uploads:/app/uploads
+    entrypoint: ["python", "docker/entrypoint.py"]
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
@@ -48,7 +49,7 @@ services:
       - POSTGRES_USER=pduser
       - POSTGRES_PASSWORD=pdpassword
       - POSTGRES_DB=pdserver
-      - GDRIVE_WEIGHTS_ID=1Svo25SRx7RZ7MW8m1abZerdv7ZGypyHT
+      - GDRIVE_WEIGHTS_ID=1Svo25SRx7RZ7MW8m1abZerdv7zgypyHT
     depends_on:
       postgres:
         condition: service_healthy
@@ -64,9 +65,12 @@ services:
         cd /app/ml/_FINAL_SCRIPTS &&
         if [ -z \"$$(ls -A weights/*.pth 2>/dev/null)\" ]; then
           echo 'Downloading model weights...';
-          gdown \"$$GDRIVE_WEIGHTS_ID\" --folder -O weights;
+          gdown \"$$GDRIVE_WEIGHTS_ID\" --folder -O weights || { echo 'gdown failed'; exit 1; };
+          echo 'Download complete, checking files:';
+          ls -la weights/;
         else
           echo 'Weights already present, skipping download.';
+          ls -la weights/;
         fi &&
         cd /app &&
         PYTHONPATH=/app rq worker ml
