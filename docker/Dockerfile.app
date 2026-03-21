@@ -22,10 +22,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy app code last so code changes don't bust the pip cache layer
 COPY . .
 
-COPY docker/entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
+COPY docker/entrypoint.py /app/docker/entrypoint.py
 
 EXPOSE 5000
 
-ENTRYPOINT ["/entrypoint.sh"]
-CMD ["gunicorn", "--workers", "4", "--worker-class", "gevent", "--bind", "0.0.0.0:5000", "app:create_app()"]
+CMD ["gunicorn", "--workers", "4", "--worker-class", "gevent", "--bind", "0.0.0.0:5000", "--preload", "app:create_app()"]

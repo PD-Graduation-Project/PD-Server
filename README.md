@@ -147,3 +147,62 @@ sequenceDiagram
     DB-->>-Tests: Test object
     Tests->>-Client: Test result with scores and progress
 ```
+
+## Utility Scripts
+
+Scripts are located in the `scripts/` directory.
+
+### Clear Test Data
+
+Delete all test data (TestGroups, TestSessions, TestInputs):
+
+```bash
+# Clear database only
+python scripts/clear_test_data.py
+
+# Clear database AND uploads folder
+python scripts/clear_test_data.py --all
+```
+
+**Docker:**
+
+```bash
+docker compose exec app python scripts/clear_test_data.py
+docker compose exec app python scripts/clear_test_data.py --all
+```
+
+### Cleanup Expired Inputs
+
+Delete expired test inputs and their associated files:
+
+```bash
+# Preview what would be deleted (dry run)
+python scripts/cleanup_expired_inputs.py
+
+# Actually delete expired inputs
+python scripts/cleanup_expired_inputs.py --run
+```
+
+**Docker:**
+
+```bash
+docker compose exec app python scripts/cleanup_expired_inputs.py
+docker compose exec app python scripts/cleanup_expired_inputs.py --run
+```
+
+### Generate Factory Key
+
+Generate factory API keys for ESP32 device provisioning:
+
+```bash
+python scripts/generate_factory_key.py <mac_address>
+
+# Example
+python scripts/generate_factory_key.py AA:BB:CC:DD:EE:FF
+```
+
+**Docker:**
+
+```bash
+docker compose exec app python scripts/generate_factory_key.py AA:BB:CC:DD:EE:FF
+```

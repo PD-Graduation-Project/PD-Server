@@ -111,11 +111,11 @@ def list_devices():
     )
 
 
-@esp32_devices_bp.route("/<int:device_id>", methods=["DELETE"])
+@esp32_devices_bp.route("/<string:device_id>", methods=["DELETE"])
 @authenticate
 def unpair_device(device_id):
     """Unpair an ESP32 device from the current user."""
-    device = db.session.get(ESP32Device, device_id)
+    device = ESP32Device.query.filter_by(device_id=device_id).first()
 
     if not device:
         return jsonify({"error": "Device not found"}), 404
