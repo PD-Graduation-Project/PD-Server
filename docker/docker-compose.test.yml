@@ -1,0 +1,95 @@
+services:
+  app:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.app
+    env_file:
+      - .env.docker
+    environment:
+      - DATABASE_URL=postgresql://pduser:pdpassword@postgres:5432/pdserver_test
+      - POSTGRES_HOST=postgres
+      - POSTGRES_USER=pduser
+      - POSTGRES_PASSWORD=pdpassword
+      - POSTGRES_DB=pdserver_test
+    ports:
+      - "5000:5000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - test_uploads:/app/uploads
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:5000/health')",
+        ]
+      interval: 60s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    entrypoint: ["python", "docker/entrypoint.py"]
+    restart: "no"
+
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: pduser
+      POSTGRES_PASSWORD: pdpassword
+      POSTGRES_DB: pdserver_test
+    volumes:
+      - test_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pduser -d pdserver_test"]
+      interval: 30s
+      timeout: 5s
+      retries: 10
+    restart: "no"
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes
+    volumes:
+      - test_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 5s
+      retries: 10
+    restart: "no"
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.mock_worker
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - MOCK_SCORE=0.5
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: "no"
+
+  mock_esp32:
+    build:
+      context: .
+      dockerfile: Dockerfile.mock_esp32
+    environment:
+      - MOCK_SERVER_URL=http://app:5000
+      - MOCK_FACTORY_SECRET=${FACTORY_SECRET:-test_factory_secret_123}
+      - MOCK_HEARTBEAT_INTERVAL=30
+      - MOCK_TEST_MODE=full
+      - MOCK_DATA_POINTS=100
+    depends_on:
+      app:
+        condition: service_healthy
+    restart: "no"
+
+volumes:
+  test_postgres_data:
+  test_redis_data:
+  test_uploads:
