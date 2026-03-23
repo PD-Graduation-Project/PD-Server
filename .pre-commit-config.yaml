@@ -24,6 +24,8 @@ repos:
     rev: v1.8.0 # Use the same version as in requirements-dev.txt
     hooks:
       - id: mypy
+        additional_dependencies:
+          - types-requests
         args: [
             --no-strict-optional,
             --ignore-missing-imports,

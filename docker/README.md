@@ -11,6 +11,8 @@ This directory contains Docker configuration for the PD-Server application with 
 | worker | RQ ML inference worker | - |
 | postgres | PostgreSQL database | 5432 (internal) |
 | redis | Redis queue | 6379 (internal) |
+| mock_esp32 | Mock ESP32 device for testing | - (test only) |
+| worker | Mock ML worker (no PyTorch) | - (test only) |
 
 ## Quick Start
 
@@ -172,4 +174,58 @@ If weights are not in the container, either:
 To run multiple workers:
 ```bash
 docker-compose up -d --scale worker=2
+```
+
+---
+
+## Mock ESP32 Testing
+
+The `mock_esp32` service simulates an ESP32 device for integration testing. It:
+
+1. Registers with factory key
+2. Sends heartbeats
+3. Connects to SSE stream
+4. Automatically uploads tremor data and completes tests on `test_started` events
+
+### Running Tests with Mock ESP32
+
+```bash
+# Run test stack with mock ESP32
+docker-compose -f docker-compose.test.yml up --build
+
+# View mock ESP32 logs
+docker-compose -f docker-compose.test.yml logs -f mock_esp32
+```
+
+### Mock ESP32 Configuration
+
+| Environment Variable | Default | Description |
+|---------------------|---------|-------------|
+| `MOCK_DEVICE_ID` | `ESP32-MOCK01` | Device ID (format: ESP32-XXXXXX) |
+| `MOCK_SERVER_URL` | `http://app:5000` | Server URL |
+| `MOCK_FACTORY_SECRET` | `test_factory_secret_123` | Factory secret for HMAC |
+| `MOCK_HEARTBEAT_INTERVAL` | `30` | Heartbeat interval (seconds) |
+| `MOCK_TEST_MODE` | `full` | Mode: `register`, `heartbeat`, `stream`, `full` |
+| `MOCK_DATA_POINTS` | `100` | IMU data points per subtest |
+
+### Test Modes
+
+| Mode | Description |
+|------|-------------|
+| `register` | Register device only, then exit |
+| `heartbeat` | Register + send periodic heartbeats |
+| `stream` | Register + connect to SSE stream |
+| `full` | Register + heartbeat + stream (default) |
+
+### Manual Testing
+
+```bash
+# Run mock ESP32 with custom settings
+docker run --rm -it \
+  -e MOCK_DEVICE_ID=ESP32-TEST01 \
+  -e MOCK_SERVER_URL=http://host.docker.internal:5000 \
+  -e MOCK_FACTORY_SECRET=your_secret \
+  --network host \
+  $(docker build -q -f Dockerfile.mock_esp32 .) \
+  --mode full
 ```
