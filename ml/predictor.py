@@ -209,16 +209,25 @@ def predict_tremor(test_session_id: int) -> float:
         raise ValueError(f"No tremor inputs found for session {test_session_id}")
 
     # Group files by subtest: {subtest: {"l": path, "r": path}}
+    # Parse subtest/hand from original file_path (S3 key or local path), NOT from temp download name
     subtests: dict[str, dict[str, str]] = {}
     for inp in inputs:
-        local_path = _get_file_path(inp.file_path)
-        filename = Path(local_path).name  # e.g. "42_2_l.txt"
+        # Use original file_path for parsing (e.g., "tremor/42/42_2_l.txt" or "uploads/tremor/42/42_2_l.txt")
+        original_path = inp.file_path
+        # Extract filename regardless of prefix
+        filename = Path(original_path).name  # e.g. "42_2_l.txt"
         parts = filename.replace(".txt", "").split("_")
         # parts: [test_id, subtest, hand]
         if len(parts) < 3:
+            logger.warning(
+                f"Skipping tremor input with unparseable filename: {filename}"
+            )
             continue
         subtest = parts[1]
         hand = parts[2]  # 'l' or 'r'
+
+        # Download from S3 if needed, then add to map
+        local_path = _get_file_path(inp.file_path)
         subtests.setdefault(subtest, {})[hand] = local_path
 
     # Get handedness from session config (default: right)

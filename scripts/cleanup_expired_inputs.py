@@ -52,6 +52,14 @@ def cleanup_expired_inputs(dry_run=True):
             storage = get_storage()
             deleted_files = 0
 
+            if dry_run:
+                logger.info(f"Would delete {len(expired)} expired inputs from S3")
+                for inp in expired[:10]:
+                    logger.info(f"  - {inp.file_path}")
+                if len(expired) > 10:
+                    logger.info(f"  ... and {len(expired) - 10} more")
+                return
+
             for inp in expired:
                 if inp.file_path:
                     success = storage.delete_file(inp.file_path)

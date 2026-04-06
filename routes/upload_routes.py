@@ -453,10 +453,13 @@ def complete_test(test_id):
     test_session.ml_status = "processing"
     db.session.commit()
 
+    ml_job_id = None
+    ml_status = "processing"
     try:
         queue = get_ml_queue()
         job = queue.enqueue(run_inference, test_session.id, job_timeout="5m")
         test_session.ml_job_id = job.id
+        ml_job_id = job.id
         db.session.commit()
     except Exception:
         logger.exception(
@@ -464,6 +467,7 @@ def complete_test(test_id):
         )
         test_session.ml_status = "failed"
         test_session.ml_job_id = None
+        ml_status = "failed"
         db.session.commit()
 
     return (
@@ -473,8 +477,8 @@ def complete_test(test_id):
                 "data": {
                     "message": "Test completed",
                     "status": "completed",
-                    "ml_status": "processing",
-                    "ml_job_id": test_session.ml_job_id,
+                    "ml_status": ml_status,
+                    "ml_job_id": ml_job_id,
                     "uploaded_count": uploaded_count,
                     "expected_count": expected_count,
                     "missing": missing,
