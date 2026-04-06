@@ -14,8 +14,67 @@ import shutil
 import sys
 import tempfile
 from pathlib import Path
+from typing import Optional
 
 from loguru import logger
+
+# ---------------------------------------------------------------------------
+# S3 Download Helper
+# ---------------------------------------------------------------------------
+_temp_files = []  # Track temp files for cleanup
+
+
+def _get_file_path(file_path: str) -> str:
+    """
+    Get local file path, downloading from S3 if needed.
+
+    If S3 is enabled, downloads the file to a temp location and returns that path.
+    Otherwise, returns the local path with uploads/ prefix if needed.
+
+    Args:
+        file_path: S3 key (e.g., 'drawing/64/spiral_l.jpg') or local path
+
+    Returns:
+        str: Local file path usable for reading
+    """
+    from config import Config
+
+    # Check if S3 storage is enabled
+    if Config.STORAGE_BACKEND == "s3":
+        from utils.s3_storage import get_storage
+
+        storage = get_storage()
+
+        # Download to temp file
+        tmp = tempfile.NamedTemporaryFile(delete=False, suffix=Path(file_path).suffix)
+        tmp_path = tmp.name
+        tmp.close()
+
+        success = storage.download_file(file_path, tmp_path)
+        if not success:
+            raise FileNotFoundError(f"Failed to download {file_path} from S3")
+
+        _temp_files.append(tmp_path)
+        logger.debug(f"Downloaded S3 file {file_path} to {tmp_path}")
+        return tmp_path
+    else:
+        # Local: prepend uploads/ prefix if needed
+        if file_path.startswith("uploads/"):
+            return file_path
+        return f"uploads/{file_path}"
+
+
+def _cleanup_temp_files():
+    """Clean up any temp files downloaded from S3."""
+    global _temp_files
+    for path in _temp_files:
+        try:
+            os.unlink(path)
+            logger.debug(f"Cleaned up temp file: {path}")
+        except Exception as e:
+            logger.warning(f"Failed to clean up temp file {path}: {e}")
+    _temp_files = []
+
 
 # ---------------------------------------------------------------------------
 # Make _FINAL_SCRIPTS importable (models/, utils/, weights/ are relative to it)
@@ -82,10 +141,14 @@ def predict_drawing(test_session_id: int) -> float:
         f"Predicting drawing for session {test_session_id}, {len(inputs)} inputs"
     )
     probs = []
-    for inp in inputs:
-        prob = _predict(inp.file_path)
-        logger.info(f"Drawing input {inp.file_path} -> prob: {prob}")
-        probs.append(prob)
+    try:
+        for inp in inputs:
+            local_path = _get_file_path(inp.file_path)
+            prob = _predict(local_path)
+            logger.info(f"Drawing input {inp.file_path} -> prob: {prob}")
+            probs.append(prob)
+    finally:
+        _cleanup_temp_files()
 
     avg = sum(probs) / len(probs)
     logger.info(f"Drawing prediction result: {avg}")
@@ -148,14 +211,15 @@ def predict_tremor(test_session_id: int) -> float:
     # Group files by subtest: {subtest: {"l": path, "r": path}}
     subtests: dict[str, dict[str, str]] = {}
     for inp in inputs:
-        filename = Path(inp.file_path).name  # e.g. "42_2_l.txt"
+        local_path = _get_file_path(inp.file_path)
+        filename = Path(local_path).name  # e.g. "42_2_l.txt"
         parts = filename.replace(".txt", "").split("_")
         # parts: [test_id, subtest, hand]
         if len(parts) < 3:
             continue
         subtest = parts[1]
         hand = parts[2]  # 'l' or 'r'
-        subtests.setdefault(subtest, {})[hand] = inp.file_path
+        subtests.setdefault(subtest, {})[hand] = local_path
 
     # Get handedness from session config (default: right)
     session = TestSession.query.get(test_session_id)
@@ -192,6 +256,7 @@ def predict_tremor(test_session_id: int) -> float:
             probs.append(prob)
     finally:
         shutil.rmtree(tmpdir, ignore_errors=True)
+        _cleanup_temp_files()
 
     if not probs:
         raise ValueError(
@@ -239,11 +304,15 @@ def predict_voice(test_session_id: int) -> float:
             gender = "F" if str(user.gender).lower() in ("female", "f", "1") else "M"
 
     probs = []
-    for inp in inputs:
-        prob = _predict(inp.file_path, gender=gender)
+    try:
+        for inp in inputs:
+            local_path = _get_file_path(inp.file_path)
+            prob = _predict(local_path, gender=gender)
 
-        logger.info(f"Voice Test Input {inp.file_path} -> prob: {prob}")
-        probs.append(prob)
+            logger.info(f"Voice Test Input {inp.file_path} -> prob: {prob}")
+            probs.append(prob)
+    finally:
+        _cleanup_temp_files()
 
     return sum(probs) / len(probs)
 

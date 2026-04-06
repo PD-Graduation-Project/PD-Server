@@ -7,9 +7,10 @@ python-dotenv==1.0.0
 python-jose[cryptography]==3.3.0
 PyJWT==2.8.0
 Werkzeug==2.3.7
-marshmallow
-redis
-rq
-loguru
-gunicorn
-gevent
+marshmallow==4.3.0
+redis==7.4.0
+rq==2.7.0
+loguru==0.7.3
+gunicorn==25.3.0
+gevent==25.9.1
+boto3==1.42.83

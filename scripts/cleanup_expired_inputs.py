@@ -43,52 +43,77 @@ def cleanup_expired_inputs(dry_run=True):
             logger.info("No expired inputs to clean up")
             return
 
-        files_to_delete = []
-        total_size = 0
+        # Check storage backend
+        use_s3 = Config.STORAGE_BACKEND == "s3"
 
-        for inp in expired:
-            if inp.file_path:
-                fpath = Path(inp.file_path)
-                if fpath.exists():
-                    size = fpath.stat().st_size
-                    total_size += size
-                    files_to_delete.append((fpath, size))
-                elif inp.file_path.startswith("/app/uploads/"):
-                    fpath = Path("/app") / inp.file_path.lstrip("/")
+        if use_s3:
+            from utils.s3_storage import get_storage
+
+            storage = get_storage()
+            deleted_files = 0
+
+            for inp in expired:
+                if inp.file_path:
+                    success = storage.delete_file(inp.file_path)
+                    if success:
+                        deleted_files += 1
+
+            deleted_inputs = TestInput.query.filter(TestInput.expires_at < now).delete()
+            db.session.commit()
+
+            logger.success(
+                f"Deleted {deleted_inputs} inputs and {deleted_files} files from S3"
+            )
+        else:
+            # Local filesystem (existing code)
+            files_to_delete = []
+            total_size = 0
+
+            for inp in expired:
+                if inp.file_path:
+                    fpath = Path(inp.file_path)
                     if fpath.exists():
                         size = fpath.stat().st_size
                         total_size += size
                         files_to_delete.append((fpath, size))
+                    elif inp.file_path.startswith("/app/uploads/"):
+                        fpath = Path("/app") / inp.file_path.lstrip("/")
+                        if fpath.exists():
+                            size = fpath.stat().st_size
+                            total_size += size
+                            files_to_delete.append((fpath, size))
 
-        size_mb = total_size / (1024 * 1024)
+            size_mb = total_size / (1024 * 1024)
 
-        if dry_run:
-            logger.info(f"Would delete {len(expired)} expired inputs:")
-            logger.info(f"Would remove {len(files_to_delete)} files ({size_mb:.2f} MB)")
-            for fpath, size in files_to_delete[:10]:
-                logger.info(f"  - {fpath} ({size / 1024:.1f} KB)")
-            if len(files_to_delete) > 10:
-                logger.info(f"  ... and {len(files_to_delete) - 10} more")
-            return
+            if dry_run:
+                logger.info(f"Would delete {len(expired)} expired inputs:")
+                logger.info(
+                    f"Would remove {len(files_to_delete)} files ({size_mb:.2f} MB)"
+                )
+                for fpath, size in files_to_delete[:10]:
+                    logger.info(f"  - {fpath} ({size / 1024:.1f} KB)")
+                if len(files_to_delete) > 10:
+                    logger.info(f"  ... and {len(files_to_delete) - 10} more")
+                return
 
-        logger.info(
-            f"Deleting {len(expired)} expired inputs and {len(files_to_delete)} files..."
-        )
+            logger.info(
+                f"Deleting {len(expired)} expired inputs and {len(files_to_delete)} files..."
+            )
 
-        deleted_files = 0
-        for fpath, _ in files_to_delete:
-            try:
-                fpath.unlink()
-                deleted_files += 1
-            except Exception as e:
-                logger.warning(f"Failed to delete {fpath}: {e}")
+            deleted_files = 0
+            for fpath, _ in files_to_delete:
+                try:
+                    fpath.unlink()
+                    deleted_files += 1
+                except Exception as e:
+                    logger.warning(f"Failed to delete {fpath}: {e}")
 
-        deleted_inputs = TestInput.query.filter(TestInput.expires_at < now).delete()
-        db.session.commit()
+            deleted_inputs = TestInput.query.filter(TestInput.expires_at < now).delete()
+            db.session.commit()
 
-        logger.success(
-            f"Deleted {deleted_inputs} inputs and {deleted_files} files ({size_mb:.2f} MB freed)"
-        )
+            logger.success(
+                f"Deleted {deleted_inputs} inputs and {deleted_files} files ({size_mb:.2f} MB freed)"
+            )
 
 
 def main():

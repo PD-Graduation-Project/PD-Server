@@ -104,9 +104,27 @@ services:
       retries: 5
     restart: unless-stopped
 
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    env_file:
+      - .env.docker
+    # environment:
+    #   MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+    #   MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    ports:
+      - "9000:9000"
+      - "9001:9001" # Console (web UI)
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+    restart: unless-stopped
+
 volumes:
   postgres_data:
   redis_data:
   uploads:
   weights:
   torch_cache:
+  minio_data:

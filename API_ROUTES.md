@@ -1687,6 +1687,88 @@ Periodic keep-alive ping. Updates `is_connected = true` and `last_seen_at` times
 
 ---
 
+## File Download Routes `/api/files`
+
+> **Client**: Mobile App
+
+When using S3 storage (MinIO), files are accessed via pre-signed URLs. The mobile app should call `GET /api/files/<input_id>` to get the download URL.
+
+---
+
+### `GET /api/files/<input_id>`
+
+Get a download URL for a test input file.
+
+**Auth required**: Yes (JWT)
+
+**URL parameters**:
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `input_id` | integer | TestInput ID |
+
+**Storage backends**:
+
+- **S3 (MinIO)**: Returns pre-signed URL (expires in 1 hour)
+- **Local**: Returns local file path (e.g., `/uploads/tremor/1/1_0_l.txt`)
+
+**Example response** `200` (S3):
+
+```json
+{
+  "url": "https://minio:9000/pd-server/tremor/1/1_0_l.txt?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=...&X-Amz-Signature=..."
+}
+```
+
+**Example response** `200` (Local):
+
+```json
+{
+  "url": "/uploads/tremor/1/1_0_l.txt"
+}
+```
+
+**Error responses**:
+
+| Status | Body |
+|--------|------|
+| `401` | `{"error": "..."}` |
+| `403` | `{"error": "Forbidden"}` |
+| `404` | `{"error": "File not found"}` |
+
+---
+
+### `DELETE /api/files/<input_id>`
+
+Delete a test input file.
+
+**Auth required**: Yes (JWT)
+
+**URL parameters**:
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `input_id` | integer | TestInput ID |
+
+**Example response** `200`:
+
+```json
+{
+  "success": true,
+  "message": "File deleted"
+}
+```
+
+**Error responses**:
+
+| Status | Body |
+|--------|------|
+| `401` | `{"error": "..."}` |
+| `403` | `{"error": "Forbidden"}` |
+| `404` | `{"error": "File not found"}` |
+
+---
+
 ## Health Check
 
 ### `GET /health`
@@ -1735,6 +1817,8 @@ Simple liveness check.
 | `POST /api/esp32-devices/pair` | Mobile | JWT | `Authorization: Bearer <token>` |
 | `GET /api/esp32-devices` | Mobile | JWT | `Authorization: Bearer <token>` |
 | `DELETE /api/esp32-devices/<device_id>` | Mobile | JWT | `Authorization: Bearer <token>` |
+| `GET /api/files/<input_id>` | Mobile | JWT | `Authorization: Bearer <token>` |
+| `DELETE /api/files/<input_id>` | Mobile | JWT | `Authorization: Bearer <token>` |
 | `POST /api/esp32/register` | ESP32 | Factory key | `X-Device-API-Key: fk_...` |
 | `GET /api/esp32/stream` | ESP32 | Production key | `X-Device-API-Key: sk_live_...` |
 | `POST /api/esp32/heartbeat` | ESP32 | Production key | `X-Device-API-Key: sk_live_...` |
