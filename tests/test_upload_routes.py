@@ -784,3 +784,51 @@ class TestCompleteTest:
         assert result["success"] is True
         assert result["data"]["status"] == "completed"
         assert result["data"]["ml_status"] == "processing"
+
+    def test_complete_test_rq_enqueue_failure_returns_failed(
+        self,
+        app,
+        client,
+        auth_headers,
+        in_progress_drawing_complete_session,
+        monkeypatch,
+    ):
+        """
+        Regression test for PR-01: Test that RQ enqueue failures are properly caught
+        and ml_status is set to 'failed' in the response (not always 'processing').
+
+        Before fix: Response always returned ml_status='processing' even on enqueue failure.
+        After fix: Response correctly returns ml_status='failed' when enqueue fails.
+        """
+        from unittest.mock import Mock
+
+        # Mock get_ml_queue to raise an exception when enqueue is called
+        mock_queue = Mock()
+        mock_queue.enqueue.side_effect = Exception("Redis connection failed")
+
+        def mock_get_ml_queue():
+            return mock_queue
+
+        monkeypatch.setattr("routes.upload_routes.get_ml_queue", mock_get_ml_queue)
+
+        response = client.post(
+            f"/api/tests/{in_progress_drawing_complete_session.id}/complete",
+            headers=auth_headers,
+        )
+
+        # Should still return 202 (test completed, but ML failed to enqueue)
+        assert response.status_code == 202
+        result = response.get_json()
+        assert result["success"] is True
+        assert result["data"]["status"] == "completed"
+        # Critical: ml_status should be 'failed', not 'processing'
+        assert result["data"]["ml_status"] == "failed"
+        assert result["data"]["ml_job_id"] is None
+
+        # Verify DB state
+        with app.app_context():
+            from models.test_models import TestSession
+
+            session = TestSession.query.get(in_progress_drawing_complete_session.id)
+            assert session.ml_status == "failed"
+            assert session.ml_job_id is None
