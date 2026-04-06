@@ -36,6 +36,16 @@ class Config:
     # Redis settings for ESP32 event pub/sub
     REDIS_URL = os.environ.get("REDIS_URL") or "redis://localhost:6379/0"
 
+    # MinIO / S3 settings
+    MINIO_ENDPOINT = os.environ.get("MINIO_ENDPOINT", "minio:9000")
+    MINIO_ROOT_USER = os.environ.get("MINIO_ROOT_USER", "minioadmin")
+    MINIO_ROOT_PASSWORD = os.environ.get("MINIO_ROOT_PASSWORD", "minioadmin")
+    MINIO_BUCKET = os.environ.get("MINIO_BUCKET", "pd-server")
+    MINIO_SECURE = os.environ.get("MINIO_SECURE", "false").lower() == "true"
+
+    # Storage backend: "local" or "s3"
+    STORAGE_BACKEND = os.environ.get("STORAGE_BACKEND", "local")
+
     @staticmethod
     def init_app(app):
         os.makedirs(Config.UPLOAD_FOLDER, exist_ok=True)

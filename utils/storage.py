@@ -1,12 +1,15 @@
 import os
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
+from io import BytesIO
 from pathlib import Path
 from typing import Optional
 
 from loguru import logger
 from werkzeug.datastructures import FileStorage
 from werkzeug.utils import secure_filename
+
+from config import Config
 
 # Base upload directory (absolute path to avoid issues when cwd changes)
 UPLOAD_DIR = Path(__file__).parent.parent / "uploads"
@@ -34,6 +37,21 @@ MAX_FILE_SIZES = {
 
 # Data retention period
 RETENTION_DAYS = 90
+
+
+def _get_storage_backend():
+    """Get storage backend: 's3' or 'local'."""
+    if Config.STORAGE_BACKEND == "s3":
+        from utils.s3_storage import get_storage
+
+        return get_storage()
+    return None
+
+
+def _get_s3_key(test_type: str, test_id: int, filename: str) -> str:
+    """Generate S3 key from test type, test id, and filename."""
+    safe_filename = secure_filename(filename)
+    return f"{test_type}/{test_id}/{safe_filename}"
 
 
 def get_file_extension(filename: str) -> str:
@@ -77,22 +95,49 @@ def save_uploaded_file(
     filename: str,
 ) -> tuple[str, int]:
     """
-    Save an uploaded file to the filesystem.
+    Save an uploaded file to storage (local or S3).
 
     Returns:
-        tuple: (file_path, file_size)
+        tuple: (file_path/s3_key, file_size)
     """
-    upload_dir = get_upload_path(test_type, test_id)
-    upload_dir.mkdir(parents=True, exist_ok=True)
+    storage = _get_storage_backend()
 
-    safe_filename = secure_filename(filename)
-    file_path = upload_dir / safe_filename
+    if storage:
+        # S3: upload directly from file object
+        s3_key = _get_s3_key(test_type, test_id, filename)
+        content_type = _get_content_type(test_type, filename)
 
-    file.save(str(file_path))
+        success, file_size = storage.upload_fileobj(file, s3_key, content_type)
+        if not success:
+            raise Exception("S3 upload failed")
 
-    file_size = os.path.getsize(file_path)
+        return s3_key, file_size
+    else:
+        # Local: existing code
+        upload_dir = get_upload_path(test_type, test_id)
+        upload_dir.mkdir(parents=True, exist_ok=True)
 
-    return str(file_path), file_size
+        safe_filename = secure_filename(filename)
+        file_path = upload_dir / safe_filename
+
+        file.save(str(file_path))
+
+        file_size = os.path.getsize(file_path)
+
+        return str(file_path), file_size
+
+
+def _get_content_type(test_type: str, filename: str) -> str:
+    """Get content type based on test type and file extension."""
+    ext = get_file_extension(filename).lower()
+
+    content_types = {
+        "drawing": {"png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg"},
+        "voice": {"wav": "audio/wav", "mp3": "audio/mpeg", "m4a": "audio/mp4"},
+        "tremor": {"txt": "text/plain"},
+    }
+
+    return content_types.get(test_type, {}).get(ext, "application/octet-stream")
 
 
 def get_expires_at() -> datetime:
@@ -132,15 +177,22 @@ def validate_hand(hand: str) -> bool:
 
 
 def delete_file(file_path: str) -> bool:
-    """Delete a file from the filesystem."""
-    try:
-        path = Path(file_path)
-        if path.exists():
-            path.unlink()
-            return True
-        return False
-    except Exception:
-        return False
+    """Delete a file from storage (local or S3)."""
+    storage = _get_storage_backend()
+
+    if storage:
+        # S3: delete from S3
+        return storage.delete_file(file_path)
+    else:
+        # Local: existing code
+        try:
+            path = Path(file_path)
+            if path.exists():
+                path.unlink()
+                return True
+            return False
+        except Exception:
+            return False
 
 
 def _write_imu_data(file_path: Path, imu_data: dict, sample_rate: float) -> None:
@@ -178,17 +230,12 @@ def save_imu_data(
     sample_rate: float = 100.0,
 ) -> tuple[str, int]:
     """
-    Save IMU data arrays to a CSV-style TXT file compatible with the ML model.
-    Returns immediately — the actual file write runs in a background thread.
+    Save IMU data arrays to storage (local or S3).
 
     Format (no header, 7 float columns):
         timestamp,ax,ay,az,gx,gy,gz
         0.0000000000,ax0,ay0,az0,gx0,gy0,gz0
-        0.0100000000,ax1,ay1,az1,gx1,gy1,gz1
         ...
-
-    The timestamp column is derived from sample_rate and is stripped by the
-    model's preprocessing pipeline (_remove_timestamp_column).
 
     Args:
         test_type: Type of test (tremor)
@@ -198,13 +245,9 @@ def save_imu_data(
         sample_rate: Sampling rate in Hz used to compute timestamps (default 100 Hz)
 
     Returns:
-        tuple: (file_path, estimated_file_size)
+        tuple: (file_path/s3_key, estimated_file_size)
     """
-    upload_dir = get_upload_path(test_type, test_id)
-    upload_dir.mkdir(parents=True, exist_ok=True)
-
-    safe_filename = secure_filename(filename)
-    file_path = upload_dir / safe_filename
+    storage = _get_storage_backend()
 
     ax = imu_data.get("ax", [])
     ay = imu_data.get("ay", [])
@@ -216,13 +259,37 @@ def save_imu_data(
     if not (len(ay) == len(ax) == len(az) == len(gx) == len(gy) == len(gz)):
         raise ValueError("All IMU arrays must have the same length")
 
-    # Write synchronously to ensure file exists before returning
-    # This prevents race conditions where /complete is called before files are written
-    _write_imu_data(file_path, imu_data, sample_rate)
+    # Build content as string for S3 upload
+    content_lines = []
+    dt = 1.0 / sample_rate
+    for i in range(len(ax)):
+        timestamp = i * dt
+        content_lines.append(
+            f"{timestamp:.10f},{ax[i]},{ay[i]},{az[i]},{gx[i]},{gy[i]},{gz[i]}\n"
+        )
+    content = "".join(content_lines)
+    file_size = len(content.encode("utf-8"))
 
-    # Return with actual size
-    actual_size = file_path.stat().st_size if file_path.exists() else 0
-    return str(file_path), actual_size
+    if storage:
+        # S3: upload from string buffer
+        s3_key = _get_s3_key(test_type, test_id, filename)
+        file_obj = BytesIO(content.encode("utf-8"))
+        success, _ = storage.upload_fileobj(file_obj, s3_key, "text/plain", file_size)
+        if not success:
+            raise Exception("S3 upload failed")
+        return s3_key, file_size
+    else:
+        # Local: existing code
+        upload_dir = get_upload_path(test_type, test_id)
+        upload_dir.mkdir(parents=True, exist_ok=True)
+
+        safe_filename = secure_filename(filename)
+        file_path = upload_dir / safe_filename
+
+        _write_imu_data(file_path, imu_data, sample_rate)
+
+        actual_size = file_path.stat().st_size if file_path.exists() else 0
+        return str(file_path), actual_size
 
 
 def cleanup_test_directory(test_type: str, test_id: int) -> bool:
