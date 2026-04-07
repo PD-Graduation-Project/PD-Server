@@ -232,7 +232,7 @@ def _upload_tremor_file(test_id, test_session):
 @upload_bp.route("/<int:test_id>/drawings", methods=["POST"])
 @authenticate
 def upload_drawings(test_id):
-    """Upload spiral drawing images."""
+    """Upload spiral drawing images (atomic: both files or nothing)."""
     current_user = db.session.get(User, g.user_id)
     if not current_user:
         return jsonify({"error": "User not found"}), 404
@@ -253,7 +253,8 @@ def upload_drawings(test_id):
             400,
         )
 
-    inputs = []
+    # Stage 1: Validate all files before uploading anything
+    files_to_upload = []
     for hand, field_name in [("l", "spiral_left"), ("r", "spiral_right")]:
         file = request.files[field_name]
 
@@ -276,33 +277,66 @@ def upload_drawings(test_id):
 
         ext = get_file_extension(file.filename)
         filename = generate_drawing_filename(hand, ext)
-        file_path, file_size = save_uploaded_file(file, "drawing", test_id, filename)
+        files_to_upload.append((file, hand, filename, ext))
 
-        test_input = TestInput(
-            test_session_id=test_id,
-            input_type="drawing_spiral",
-            file_path=file_path,
-            original_filename=file.filename,
-            mime_type=file.content_type or f"image/{ext}",
-            file_size=file_size,
-            expires_at=get_expires_at(),
-        )
-        db.session.add(test_input)
-        db.session.flush()
+    # Stage 2: Upload all files (track paths for cleanup on failure)
+    uploaded_paths = []
+    try:
+        for file, hand, filename, ext in files_to_upload:
+            file_path, file_size = save_uploaded_file(
+                file, "drawing", test_id, filename
+            )
+            uploaded_paths.append(
+                (file_path, file_size, hand, file.filename, ext, file.content_type)
+            )
+    except Exception as e:
+        logger.error(f"File upload failed for drawing test {test_id}: {e}")
+        for path_info in uploaded_paths:
+            delete_file(path_info[0])
+        return jsonify({"error": "File upload failed"}), 500
 
-        inputs.append(
-            {
-                "id": test_input.id,
-                "input_type": "drawing_spiral",
-                "hand": hand,
-                "file_path": file_path,
-            }
-        )
+    # Stage 3: Create DB records and commit (rollback + cleanup on failure)
+    inputs = []
+    try:
+        for (
+            file_path,
+            file_size,
+            hand,
+            original_filename,
+            ext,
+            content_type,
+        ) in uploaded_paths:
+            test_input = TestInput(
+                test_session_id=test_id,
+                input_type="drawing_spiral",
+                file_path=file_path,
+                original_filename=original_filename,
+                mime_type=content_type or f"image/{ext}",
+                file_size=file_size,
+                expires_at=get_expires_at(),
+            )
+            db.session.add(test_input)
+            db.session.flush()
 
-    if test_session.status == "pending":
-        test_session.status = "in_progress"
+            inputs.append(
+                {
+                    "id": test_input.id,
+                    "input_type": "drawing_spiral",
+                    "hand": hand,
+                    "file_path": file_path,
+                }
+            )
 
-    db.session.commit()
+        if test_session.status == "pending":
+            test_session.status = "in_progress"
+
+        db.session.commit()
+    except Exception as e:
+        logger.error(f"DB commit failed for drawing upload test {test_id}: {e}")
+        db.session.rollback()
+        for path_info in uploaded_paths:
+            delete_file(path_info[0])
+        return jsonify({"error": "Failed to save upload"}), 500
 
     return (
         jsonify(
