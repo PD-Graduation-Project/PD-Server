@@ -22,7 +22,7 @@ def with_retry(max_retries=3, delay=1, backoff=2):
     def decorator(fn):
         @wraps(fn)
         def wrapper(*args, **kwargs):
-            last_error = None
+            last_error = Exception("Retry failed with no exception")
             for attempt in range(max_retries):
                 try:
                     return fn(*args, **kwargs)
@@ -43,6 +43,7 @@ def with_retry(max_retries=3, delay=1, backoff=2):
     return decorator
 
 
+@with_retry(max_retries=3, delay=2, backoff=2)
 def run_inference(session_id: int) -> dict:
     """
     RQ task: Run ML inference for a completed test session.
