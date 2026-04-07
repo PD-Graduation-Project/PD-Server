@@ -27,8 +27,16 @@ class ESP32ConnectionManager:
         """
         Register an ESP32 SSE connection for a user.
         Subscribes to a Redis channel for this user and starts a listener thread.
+
+        If a connection already exists for this user, it will be replaced after
+        proper cleanup of the old connection.
         """
         channel = f"esp32:user:{user_id}"
+
+        # Clean up existing connection if any (to prevent leaks)
+        existing = self._connections.get(user_id)
+        if existing:
+            self.remove(user_id)
 
         try:
             # IMPORTANT: Keep redis_client alive - if it goes out of scope,
@@ -154,6 +162,7 @@ class ESP32ConnectionManager:
         channel = f"esp32:user:{user_id}"
         message = json.dumps({"event": event, "data": data})
 
+        # Hold lock during both check and publish to prevent TOCTOU race
         with self._lock:
             conn = self._connections.get(user_id)
             if not conn:
@@ -162,14 +171,14 @@ class ESP32ConnectionManager:
                 )
                 return False
 
-        try:
-            redis_client = self._get_redis_client()
-            redis_client.publish(channel, message)
-            logger.info(f"ESP32 event sent: '{event}' to user={user_id}")
-            return True
-        except Exception as e:
-            logger.error(f"ESP32 send_event failed for user={user_id}: {e}")
-            return False
+            try:
+                redis_client = self._get_redis_client()
+                redis_client.publish(channel, message)
+                logger.info(f"ESP32 event sent: '{event}' to user={user_id}")
+                return True
+            except Exception as e:
+                logger.error(f"ESP32 send_event failed for user={user_id}: {e}")
+                return False
 
     def get_connected_devices(self):
         """Get list of all connected device user IDs."""
