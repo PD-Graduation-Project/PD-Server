@@ -224,13 +224,70 @@ def create_app(config_override=None):
     def health_check():
         return jsonify({"status": "healthy"}), 200
 
+    @app.route("/ready", methods=["GET"])
+    def readiness_check():
+        """Readiness check - verifies all dependencies are available."""
+        issues = []
+
+        # Check database
+        try:
+            db.session.execute(db.text("SELECT 1"))
+        except Exception as e:
+            issues.append(f"database: {e}")
+
+        # Check Redis
+        try:
+            from redis import Redis
+
+            r = Redis.from_url(Config.REDIS_URL)
+            r.ping()
+            r.close()
+        except Exception as e:
+            issues.append(f"redis: {e}")
+
+        # Check storage (S3 or local)
+        try:
+            if Config.STORAGE_BACKEND == "s3":
+                from utils.s3_storage import get_storage
+
+                storage = get_storage()
+                storage.file_exists("healthcheck")  # Just verify client works
+            else:
+                from pathlib import Path
+
+                upload_dir = Path(Config.UPLOAD_FOLDER)
+                if not upload_dir.exists():
+                    raise Exception("upload directory does not exist")
+        except Exception as e:
+            issues.append(f"storage: {e}")
+
+        if issues:
+            return jsonify({"status": "not ready", "issues": issues}), 503
+
+        return jsonify({"status": "ready"}), 200
+
     @app.errorhandler(404)
     def not_found(error):
         return jsonify({"error": "Not found"}), 404
 
     @app.errorhandler(500)
     def internal_error(error):
-        return jsonify({"error": "Internal server error"}), 500
+        request_id = g.get("request_id", "unknown")
+        logger.error(f"Internal error (request_id={request_id}): {error}")
+        return (
+            jsonify({"error": "Internal server error", "request_id": request_id}),
+            500,
+        )
+
+    @app.errorhandler(Exception)
+    def handle_exception(error):
+        """Global exception handler - catches all unhandled exceptions."""
+        request_id = g.get("request_id", "unknown")
+        logger.exception(f"Unhandled exception (request_id={request_id}): {error}")
+        return (
+            jsonify({"error": "Internal server error", "request_id": request_id}),
+            500,
+        )
 
     return app
 
