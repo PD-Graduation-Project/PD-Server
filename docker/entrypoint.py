@@ -61,6 +61,15 @@ def main():
     print("PostgreSQL is up - running migrations...")
     run(["flask", "db", "upgrade"])
 
+    if os.environ.get("STORAGE_BACKEND") == "s3":
+        print("Creating S3 bucket if needed...")
+        import sys
+
+        sys.path.insert(0, "/app")
+        from utils.s3_storage import get_storage
+
+        get_storage().create_bucket_if_not_exists()
+
     print("Starting application...")
     cmd = (
         sys.argv[1:]

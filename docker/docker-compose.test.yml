@@ -11,13 +11,11 @@ services:
       - POSTGRES_USER=pduser
       - POSTGRES_PASSWORD=pdpassword
       - POSTGRES_DB=pdserver_test
-    ports:
-      - "5000:5000"
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
+      - STORAGE_BACKEND=s3
+      - MINIO_ENDPOINT=minio:9000
+      - MINIO_BUCKET=pdserver-test
+      - MINIO_ROOT_USER=minioadmin
+      - MINIO_ROOT_PASSWORD=minioadmin
     volumes:
       - test_uploads:/app/uploads
     healthcheck:
@@ -58,8 +56,19 @@ services:
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 30s
-      timeout: 5s
-      retries: 10
+    restart: "no"
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
     restart: "no"
 
   worker:
@@ -85,6 +94,39 @@ services:
       - MOCK_TEST_MODE=full
       - MOCK_DATA_POINTS=100
     depends_on:
+      app:
+        condition: service_healthy
+    restart: "no"
+
+  test:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.test
+    command: ["python", "-m", "pytest", "tests/", "-v"]
+    volumes:
+      - ../tests:/app/tests:ro
+      - ../pytest.ini:/app/pytest.ini:ro
+      - ../.coveragerc:/app/.coveragerc:ro
+    environment:
+      - DATABASE_URL=postgresql://pduser:pdpassword@postgres:5432/pdserver_test
+      - POSTGRES_HOST=postgres
+      - POSTGRES_USER=pduser
+      - POSTGRES_PASSWORD=pdpassword
+      - POSTGRES_DB=pdserver_test
+      - STORAGE_BACKEND=s3
+      - MINIO_ENDPOINT=minio:9000
+      - MINIO_BUCKET=pdserver-test
+      - MINIO_ROOT_USER=minioadmin
+      - MINIO_ROOT_PASSWORD=minioadmin
+      - JWT_SECRET=test-secret-key-do-not-use-in-production
+      - FACTORY_SECRET=test_factory_secret
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
       app:
         condition: service_healthy
     restart: "no"
