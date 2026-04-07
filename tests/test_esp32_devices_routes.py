@@ -126,7 +126,7 @@ class TestUnpairDevice:
     def test_unpair_success(self, app, client, auth_headers, esp32_device):
         """Unpair device removes user_id."""
         response = client.delete(
-            f"/api/esp32-devices/{esp32_device.id}",
+            f"/api/esp32-devices/{esp32_device.device_id}",
             headers=auth_headers,
         )
         assert response.status_code == 200

@@ -251,7 +251,7 @@ class TestESP32Lifecycle:
 
         # ===== STEP 7: Device is Unpaired =====
         unpair_response = e2e_client.delete(
-            f"/api/esp32-devices/{pair_data['id']}", headers=auth_headers
+            f"/api/esp32-devices/{pair_data['device_id']}", headers=auth_headers
         )
         assert unpair_response.status_code == 200
 

@@ -120,6 +120,7 @@ services:
       - MINIO_ROOT_PASSWORD=minioadmin
       - JWT_SECRET=test-secret-key-do-not-use-in-production
       - FACTORY_SECRET=test_factory_secret
+      - REDIS_URL=redis://redis:6379/0
     depends_on:
       postgres:
         condition: service_healthy
