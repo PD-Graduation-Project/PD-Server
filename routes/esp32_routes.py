@@ -9,7 +9,7 @@ from middleware.authenticate_esp32 import authenticate_esp32, authenticate_esp32
 from models.database import db
 from models.test_models import ESP32Device
 from utils.esp32_connection_manager import connection_manager
-from utils.factory_key import validate_device_id_format
+from utils.factory_key import validate_device_id_format, verify_factory_key
 
 esp32_bp = Blueprint("esp32", __name__, url_prefix="/api/esp32")
 
@@ -41,9 +41,9 @@ def register_device():
             400,
         )
 
-    # if not verify_factory_key(device_id, g.factory_key):
-    #     logger.error(f"Invalid Factory Key in X-Device-API-Key 2")
-    #     return jsonify({"error": "Invalid factory key"}), 401
+    if not verify_factory_key(device_id, g.factory_key):
+        logger.error(f"Invalid Factory Key in X-Device-API-Key")
+        return jsonify({"error": "Invalid factory key"}), 401
 
     # Look up existing device
     device = ESP32Device.query.filter_by(device_id=device_id).first()
@@ -71,8 +71,9 @@ def register_device():
             factory_api_key=g.factory_key,
         )
         db.session.add(device)
+        db.session.flush()  # Get device.id before generating key
 
-    # Generate production API key
+    # Generate production API key (always regenerate to ensure uniqueness)
     production_key = f"sk_live_{secrets.token_urlsafe(32)}"
     device.api_key = production_key
     db.session.commit()
