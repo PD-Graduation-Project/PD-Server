@@ -187,6 +187,8 @@ def heartbeat():
 
     logger.debug(f"ESP32 heartbeat received: device_id={device_info['device_id']}")
 
+    connection_manager._heartbeat(device_info["user_id"])
+
     return (
         jsonify(
             {
