@@ -4,6 +4,7 @@ RQ Task definitions for ML inference.
 These tasks run in separate RQ worker processes, not in the Flask request thread.
 """
 
+import math
 import time
 from datetime import datetime, timezone
 from functools import wraps
@@ -96,6 +97,11 @@ def run_inference(session_id: int) -> dict:
             else:
                 raise ValueError(f"Unknown test type: {test_type}")
 
+            if math.isnan(ml_score) or math.isinf(ml_score):
+                raise ValueError(
+                    f"Invalid ML score returned: {ml_score} for session {session_id}"
+                )
+
             # Store the score before trying to commit
             session.ml_score = ml_score
             session.ml_status = "completed"
@@ -133,6 +139,12 @@ def run_inference(session_id: int) -> dict:
                             voice_score=type_to_score["voice"],
                             user_id=session.user_id,
                         )
+                        if math.isnan(group_overall_score) or math.isinf(
+                            group_overall_score
+                        ):
+                            raise ValueError(
+                                f"Invalid overall score: {group_overall_score} for group {group.id}"
+                            )
                         group.overall_score = group_overall_score
                         group.ml_status = "completed"
                         group.ml_job_id = None
