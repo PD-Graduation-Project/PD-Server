@@ -145,7 +145,15 @@ def create_app(config_override=None):
     db.init_app(app)
     Migrate(app, db)
 
-    CORS(app)
+    # CORS - configurable via CORS_ORIGINS env var
+    # Empty = deny all, comma-separated list = allowed origins
+    cors_origins = Config.CORS_ORIGINS.strip() if Config.CORS_ORIGINS else ""
+    if cors_origins:
+        origins = [o.strip() for o in cors_origins.split(",") if o.strip()]
+        CORS(app, origins=origins)
+    else:
+        # No origins configured = only same-origin requests allowed
+        CORS(app, origins=[])
 
     @app.before_request
     def check_ip():
@@ -161,15 +169,17 @@ def create_app(config_override=None):
             logger.bind(request_id=g.request_id).info(
                 "→ " + method_color + request.method + RESET + " " + request.path
             )
-            body = request.get_data(as_text=True)
-            if body:
-                logger.bind(request_id=g.request_id).debug(
-                    "  Body: " + DIM_YELLOW + body[:500] + RESET
-                )
-            elif request.form:
-                logger.bind(request_id=g.request_id).debug(
-                    "  Form: " + DIM_YELLOW + str(dict(request.form)) + RESET
-                )
+            # Only log body in development, never in production
+            if os.environ.get("FLASK_ENV", "production") == "development":
+                body = request.get_data(as_text=True)
+                if body:
+                    logger.bind(request_id=g.request_id).debug(
+                        "  Body: " + DIM_YELLOW + body[:500] + RESET
+                    )
+                elif request.form:
+                    logger.bind(request_id=g.request_id).debug(
+                        "  Form: " + DIM_YELLOW + str(dict(request.form)) + RESET
+                    )
         except Exception:
             pass
 
