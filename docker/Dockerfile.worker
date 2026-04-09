@@ -19,8 +19,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # ── Python deps ──────────────────────────────────────────────────────────────
 # Install torch CPU-only first (saves ~7 GB vs default CUDA build)
 RUN pip install --no-cache-dir \
-    torch==2.1.0+cpu \
-    torchvision==0.16.0+cpu \
+    torch==2.5.1+cpu \
+    torchvision==0.20.1+cpu \
     --index-url https://download.pytorch.org/whl/cpu
 
 # All remaining ML deps in one layer
