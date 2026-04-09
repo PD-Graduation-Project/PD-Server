@@ -71,13 +71,16 @@ def main():
         get_storage().create_bucket_if_not_exists()
 
     print("Starting application...")
+    import os
+
+    workers = os.environ.get("GUNICORN_WORKERS", "2")
     cmd = (
         sys.argv[1:]
         if len(sys.argv) > 1
         else [
             "gunicorn",
             "--workers",
-            "4",
+            workers,
             "--worker-class",
             "gevent",
             "--bind",

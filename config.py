@@ -46,6 +46,12 @@ class Config:
     # Storage backend: "local" or "s3"
     STORAGE_BACKEND = os.environ.get("STORAGE_BACKEND", "local")
 
+    # Gunicorn workers (default 2 for small VMs)
+    GUNICORN_WORKERS = int(os.environ.get("GUNICORN_WORKERS", "2"))
+
+    # CORS allowed origins (comma-separated list, empty = deny all)
+    CORS_ORIGINS = os.environ.get("CORS_ORIGINS", "")
+
     @staticmethod
     def init_app(app):
         os.makedirs(Config.UPLOAD_FOLDER, exist_ok=True)

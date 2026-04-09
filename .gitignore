@@ -1,12 +1,17 @@
 __pycache__/
 *.pyc
 .env
+.envrc
 *.db
 uploads/
 *.log
 .DS_Store
 venv/
-.envrc
 .coverage
 logs/
 ml/*/weights/
+
+# Docker secrets (never commit)
+docker/.env.docker
+docker/.env.docker.bak
+docker/.env.bak
