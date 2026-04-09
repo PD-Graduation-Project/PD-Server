@@ -31,9 +31,10 @@ Notes:
 - Feature order must match training exactly.
 """
 
-import numpy as np
 import torch
+import numpy as np
 from ml_models.densenet169 import DenseNet1691D
+
 
 # -------------------------------------------------
 # Fixed boundaries (must match training)

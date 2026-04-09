@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
+from torchvision.models import mobilenet_v3_large, MobileNet_V3_Large_Weights
 from torch import inference_mode
-from torchvision.models import MobileNet_V3_Large_Weights, mobilenet_v3_large
 
 
 class MobileNetV3LargeBinary(nn.Module):
@@ -21,21 +21,18 @@ class MobileNetV3LargeBinary(nn.Module):
 
         # 1. Load MobileNetV3-Large
         if pretrained:
-            self.mobilenet = mobilenet_v3_large(
-                weights=MobileNet_V3_Large_Weights.DEFAULT
-            )
+            self.mobilenet = mobilenet_v3_large(weights=MobileNet_V3_Large_Weights.DEFAULT)
         else:
             self.mobilenet = mobilenet_v3_large(weights=None)
 
         # 2. Modify first conv layer for grayscale input
         old_conv = self.mobilenet.features[0][0]  # Conv2d inside ConvNormActivation
         new_conv = nn.Conv2d(
-            1,
-            old_conv.out_channels,
+            1, old_conv.out_channels,
             kernel_size=old_conv.kernel_size,
             stride=old_conv.stride,
             padding=old_conv.padding,
-            bias=old_conv.bias is not None,
+            bias=old_conv.bias is not None
         )
 
         # 3. Copy pretrained weights averaged across RGB channels
@@ -56,13 +53,11 @@ class MobileNetV3LargeBinary(nn.Module):
         in_features = self.mobilenet.classifier[-1].in_features  # 1280
 
         for hidden_size in hidden_units:
-            classifier_layers.extend(
-                [
-                    nn.Linear(in_features, hidden_size),
-                    nn.ReLU(inplace=True),
-                    nn.Dropout(dropout_rate),
-                ]
-            )
+            classifier_layers.extend([
+                nn.Linear(in_features, hidden_size),
+                nn.ReLU(inplace=True),
+                nn.Dropout(dropout_rate)
+            ])
             in_features = hidden_size
 
         # Final binary output

@@ -5,12 +5,13 @@ This module predicts Parkinson's Disease probability from hand-drawn spirals or 
 Images are preprocessed with CLAHE enhancement and normalized before inference.
 """
 
-import albumentations as A
-import numpy as np
 import torch
+import albumentations as A
 from albumentations.pytorch import ToTensorV2
-from ml_models.mobilenetV3 import MobileNetV3LargeBinary
 from PIL import Image
+import numpy as np
+
+from ml_models.mobilenetV3 import MobileNetV3LargeBinary
 
 
 # -------------------------

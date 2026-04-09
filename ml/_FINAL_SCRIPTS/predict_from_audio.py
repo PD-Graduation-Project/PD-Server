@@ -16,9 +16,9 @@ Expected model input order (25 features):
 ]
 """
 
-import joblib
-import numpy as np
 import torch
+import numpy as np
+import joblib
 from ml_models.densenet169 import DenseNet1691D
 from ml_utils.uams_feature_extractor import UAMSFeatureExtractor
 
@@ -151,3 +151,4 @@ def predict(audio_path, gender=None, device=None):
         prob = torch.sigmoid(logits).item()
 
     return prob
+
