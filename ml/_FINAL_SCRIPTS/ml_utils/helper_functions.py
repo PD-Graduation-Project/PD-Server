@@ -1,12 +1,10 @@
+import yaml
 from pathlib import Path
 
-import yaml
-
-
-def load_user_data(yaml_path="examples/user_data.yaml"):
+def load_user_data(yaml_path='examples/user_data.yaml'):
     """
     Load user data from YAML file.
-
+    
     Expected YAML format:
     ---
     age: 50
@@ -16,26 +14,24 @@ def load_user_data(yaml_path="examples/user_data.yaml"):
     appearance_in_kinship: false  # or true
     appearance_in_first_grade_kinship: false  # or true
     questions: [1, 1, 1, ..., 1]  # 28 binary answers
-
+    
     Returns:
         dict: User data with standardized keys
     """
-    with open(yaml_path, "r") as f:
+    with open(yaml_path, 'r') as f:
         data = yaml.safe_load(f)
-
+    
     # Standardize gender encoding (0 = male, 1 = female)
-    if isinstance(data["gender"], str):
-        data["gender"] = 1 if data["gender"].lower() == "female" else 0
-
+    if isinstance(data['gender'], str):
+        data['gender'] = 1 if data['gender'].lower() == 'female' else 0
+    
     # Standardize kinship encoding (0 = False, 1 = True)
-    if isinstance(data["appearance_in_kinship"], bool):
-        data["appearance_in_kinship"] = int(data["appearance_in_kinship"])
-
-    if isinstance(data["appearance_in_first_grade_kinship"], bool):
-        data["appearance_in_first_grade_kinship"] = int(
-            data["appearance_in_first_grade_kinship"]
-        )
-
+    if isinstance(data['appearance_in_kinship'], bool):
+        data['appearance_in_kinship'] = int(data['appearance_in_kinship'])
+    
+    if isinstance(data['appearance_in_first_grade_kinship'], bool):
+        data['appearance_in_first_grade_kinship'] = int(data['appearance_in_first_grade_kinship'])
+    
     return data
 
 
@@ -49,7 +45,7 @@ def print_section_header(title):
 def print_result(label, probability, threshold=0.5):
     """
     Print prediction result with interpretation.
-
+    
     Args:
         label: Description of the test sample
         probability: Prediction probability (0-1)

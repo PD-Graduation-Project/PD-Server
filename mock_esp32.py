@@ -14,8 +14,9 @@ Usage:
 Environment Variables:
     MOCK_DEVICE_ID: Device ID (default: ESP32-MOCK01)
     MOCK_SERVER_URL: Server URL (default: http://app:5000)
-    MOCK_FACTORY_SECRET: Factory secret for key generation
-    MOCK_HEARTBEAT_INTERVAL: Heartbeat interval in seconds (default: 30)
+    FACTORY_SECRET: Factory secret for key generation (reads from app config)
+    MOCK_FACTORY_SECRET: Factory secret (fallback)
+    MOCK_HEARTBEAT_INTERVAL: Heartbeat interval in seconds (default: 10)
     MOCK_STREAM_RETRY_INTERVAL: SSE retry interval in seconds (default: 15)
     MOCK_TEST_MODE: Test mode - 'register', 'heartbeat', 'stream', or 'full' (default: 'full')
 """
@@ -35,10 +36,6 @@ from enum import Enum
 from typing import Optional
 
 import requests
-
-# from dotenv import load_dotenv
-#
-# load_dotenv()
 
 
 class TestMode(Enum):
@@ -415,6 +412,8 @@ def main():
         help="Number of IMU data points per subtest",
     )
     args = parser.parse_args()
+
+    print(f"[DEBUG] Factory secret loaded: {args.factory_secret[:10]}...")
 
     # Generate random device ID if not provided
     if args.device_id:

@@ -8,8 +8,8 @@ Tests all three prediction modalities:
 4. Questionnaire data (demographics + 28 questions)
 """
 
+import yaml
 from pathlib import Path
-
 from ml_utils.helper_functions import *
 
 # =============
@@ -28,7 +28,7 @@ audio_data = ["examples/healthy_audio.wav", "examples/pd_audio.wav"]
 
 tremor_data = [
     ("Healthy tremor", "examples/tremor/healthy/", 0, "right"),
-    ("PD tremor", "examples/tremor/pd/", 2, "right"),
+    ("PD tremor", "examples/tremor/pd/", 10, "right"),
 ]
 
 
@@ -171,4 +171,5 @@ def run_tests(mode="all"):
 
 if __name__ == "__main__":
     # Change mode here
-    run_tests(mode="all")
+    run_tests(mode="tremor")
+
