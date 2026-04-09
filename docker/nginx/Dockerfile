@@ -3,6 +3,9 @@
 
 FROM nginx:alpine
 
+# Install openssl for self-signed cert generation
+RUN apk add --no-cache openssl
+
 # Create ssl directory
 RUN mkdir -p /etc/nginx/ssl
 
