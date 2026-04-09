@@ -281,7 +281,7 @@ def predict_tremor(test_session_id: int) -> float:
 @_run_in_scripts_dir
 def predict_voice(test_session_id: int) -> float:
     """
-    Predict Parkinson's probability from a voice recording (WAV).
+    Predict Parkinson's probability from a voice recording (WAV/M4A).
 
     Queries the DB for voice_recording inputs, extracts audio features,
     and returns the model probability.
@@ -292,6 +292,8 @@ def predict_voice(test_session_id: int) -> float:
     Returns:
         float: Probability of Parkinson's disease (0.0 = healthy, 1.0 = PD)
     """
+    import subprocess
+
     from predict_from_audio import predict as _predict
 
     from models.test_models import TestInput, TestSession
@@ -304,7 +306,6 @@ def predict_voice(test_session_id: int) -> float:
     if not inputs:
         raise ValueError(f"No voice inputs found for session {test_session_id}")
 
-    # Determine gender from the user's profile if available
     session = TestSession.query.get(test_session_id)
     gender = None
     if session and session.user_id_fk:
@@ -316,6 +317,27 @@ def predict_voice(test_session_id: int) -> float:
     try:
         for inp in inputs:
             local_path = _get_file_path(inp.file_path)
+
+            if local_path.lower().endswith(".m4a"):
+                wav_path = tempfile.NamedTemporaryFile(suffix=".wav", delete=False).name
+                _temp_files.append(wav_path)
+                subprocess.run(
+                    [
+                        "ffmpeg",
+                        "-y",
+                        "-i",
+                        local_path,
+                        "-ar",
+                        "44100",
+                        "-ac",
+                        "1",
+                        wav_path,
+                    ],
+                    capture_output=True,
+                    check=True,
+                )
+                local_path = wav_path
+
             prob = _predict(local_path, gender=gender)
 
             logger.info(f"Voice Test Input {inp.file_path} -> prob: {prob}")
