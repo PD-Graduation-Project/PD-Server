@@ -218,16 +218,6 @@ def _collect_runtime_metrics() -> None:
     except Exception:
         pass
 
-
-def _get_client_ip() -> str:
-    forwarded_for = request.headers.get("X-Forwarded-For", "").strip()
-    if forwarded_for:
-        return forwarded_for.split(",", 1)[0].strip()
-    real_ip = request.headers.get("X-Real-IP", "").strip()
-    if real_ip:
-        return real_ip
-    return request.remote_addr or "unknown"
-
     try:
         from redis import Redis
 
@@ -275,6 +265,16 @@ def _get_client_ip() -> str:
         r.close()
     except Exception:
         pass
+
+
+def _get_client_ip() -> str:
+    forwarded_for = request.headers.get("X-Forwarded-For", "").strip()
+    if forwarded_for:
+        return forwarded_for.split(",", 1)[0].strip()
+    real_ip = request.headers.get("X-Real-IP", "").strip()
+    if real_ip:
+        return real_ip
+    return request.remote_addr or "unknown"
 
 
 # ── App factory ───────────────────────────────────────────────────────────────
