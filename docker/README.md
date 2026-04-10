@@ -249,6 +249,23 @@ docker-compose -f docker-compose.test.yml logs -f mock_esp32
 | `MOCK_TEST_MODE` | `full` | Mode: `register`, `heartbeat`, `stream`, `full` |
 | `MOCK_DATA_POINTS` | `100` | IMU data points per subtest |
 
+---
+
+## Global Rate Limiting
+
+All routes are rate-limited globally before route matching, including unknown paths that return `404`.
+
+### Environment variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `RATE_LIMIT_ENABLED` | `true` | Enable/disable global rate limiter |
+| `RATE_LIMIT_REQUESTS` | `120` | Max requests per IP in the window |
+| `RATE_LIMIT_WINDOW_SECONDS` | `60` | Rate-limit window size in seconds |
+| `RATE_LIMIT_EXEMPT_PATHS` | `/health,/ready,/metrics` | Comma-separated paths excluded from limiting |
+
+When a request is limited, API returns `429` and includes the detected client IP in the response body.
+
 ### Test Modes
 
 | Mode | Description |

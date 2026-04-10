@@ -57,6 +57,16 @@ class Config:
     LOG_FORMAT = os.environ.get("LOG_FORMAT", "pretty")  # pretty or json
     LOG_SILENT_PATHS = os.environ.get("LOG_SILENT_PATHS", "/metrics")
 
+    # Global rate limiting (applies before route matching, including 404s)
+    RATE_LIMIT_ENABLED = os.environ.get("RATE_LIMIT_ENABLED", "true").lower() == "true"
+    RATE_LIMIT_REQUESTS = int(os.environ.get("RATE_LIMIT_REQUESTS", "120"))
+    RATE_LIMIT_WINDOW_SECONDS = int(os.environ.get("RATE_LIMIT_WINDOW_SECONDS", "60"))
+    RATE_LIMIT_EXEMPT_PATHS = {
+        p.strip()
+        for p in os.environ.get("RATE_LIMIT_EXEMPT_PATHS", "").split(",")
+        if p.strip()
+    }
+
     @staticmethod
     def init_app(app):
         os.makedirs(Config.UPLOAD_FOLDER, exist_ok=True)

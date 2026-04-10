@@ -116,6 +116,10 @@ _log_file = None
 _log_file_date: str | None = None
 _log_lock = threading.Lock()
 
+# In-memory fixed-window rate limiting buckets: {(ip, window): count}
+_rate_limit_buckets: dict[tuple[str, int], int] = {}
+_rate_limit_lock = threading.Lock()
+
 
 def file_sink(message) -> None:
     global _log_file, _log_file_date
@@ -214,6 +218,16 @@ def _collect_runtime_metrics() -> None:
     except Exception:
         pass
 
+
+def _get_client_ip() -> str:
+    forwarded_for = request.headers.get("X-Forwarded-For", "").strip()
+    if forwarded_for:
+        return forwarded_for.split(",", 1)[0].strip()
+    real_ip = request.headers.get("X-Real-IP", "").strip()
+    if real_ip:
+        return real_ip
+    return request.remote_addr or "unknown"
+
     try:
         from redis import Redis
 
@@ -287,8 +301,44 @@ def create_app(config_override=None):
         CORS(app, origins=[])
 
     @app.before_request
+    def global_rate_limit():
+        if not Config.RATE_LIMIT_ENABLED:
+            return None
+        if request.path in Config.RATE_LIMIT_EXEMPT_PATHS:
+            return None
+
+        client_ip = _get_client_ip()
+        window = int(time.time()) // Config.RATE_LIMIT_WINDOW_SECONDS
+        key = (client_ip, window)
+
+        with _rate_limit_lock:
+            current = _rate_limit_buckets.get(key, 0) + 1
+            _rate_limit_buckets[key] = current
+
+            # Best-effort cleanup for stale windows
+            if len(_rate_limit_buckets) > 5000:
+                cutoff = window - 2
+                stale_keys = [k for k in _rate_limit_buckets if k[1] < cutoff]
+                for stale_key in stale_keys:
+                    _rate_limit_buckets.pop(stale_key, None)
+
+        if current > Config.RATE_LIMIT_REQUESTS:
+            return (
+                jsonify(
+                    {
+                        "error": "Too many requests",
+                        "ip": client_ip,
+                        "limit": Config.RATE_LIMIT_REQUESTS,
+                        "window_seconds": Config.RATE_LIMIT_WINDOW_SECONDS,
+                    }
+                ),
+                429,
+            )
+        return None
+
+    @app.before_request
     def check_ip():
-        if Config.ALLOWED_IPS and request.remote_addr not in Config.ALLOWED_IPS:
+        if Config.ALLOWED_IPS and _get_client_ip() not in Config.ALLOWED_IPS:
             abort(403)
 
     @app.before_request
@@ -456,7 +506,11 @@ def create_app(config_override=None):
 
     @app.errorhandler(404)
     def not_found(error):
-        return jsonify({"error": "Not found"}), 404
+        return jsonify({"error": "Not found", "ip": _get_client_ip()}), 404
+
+    @app.errorhandler(429)
+    def too_many_requests(error):
+        return jsonify({"error": "Too many requests", "ip": _get_client_ip()}), 429
 
     @app.errorhandler(500)
     def internal_error(error):
