@@ -1,5 +1,6 @@
 services:
   nginx:
+    image: ${NGINX_IMAGE:-pd-server-nginx:local}
     build:
       context: ./nginx
       dockerfile: Dockerfile
@@ -11,8 +12,11 @@ services:
     volumes:
       - uploads:/app/uploads
     restart: unless-stopped
+    labels:
+      - com.centurylinklabs.watchtower.enable=true
 
   app:
+    image: ${APP_IMAGE:-pd-server-app:local}
     build:
       context: ..
       dockerfile: docker/Dockerfile.app
@@ -33,6 +37,8 @@ services:
       - app_logs:/app/logs
     entrypoint: ["python", "docker/entrypoint.py"]
     restart: unless-stopped
+    labels:
+      - com.centurylinklabs.watchtower.enable=true
     logging:
       driver: json-file
       options:
@@ -45,6 +51,7 @@ services:
       retries: 3
 
   worker:
+    image: ${WORKER_IMAGE:-pd-server-worker:local}
     build:
       context: ..
       dockerfile: docker/Dockerfile.worker
@@ -82,6 +89,8 @@ services:
         PYTHONPATH=/app rq worker ml
       "
     restart: unless-stopped
+    labels:
+      - com.centurylinklabs.watchtower.enable=true
     logging:
       driver: json-file
       options:
@@ -143,6 +152,25 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+
+  watchtower:
+    image: containrrr/watchtower:1.7.1
+    profiles:
+      - prod
+    command:
+      - --label-enable
+      - --cleanup
+      - --rolling-restart
+      - --interval
+      - ${WATCHTOWER_INTERVAL:-30}
+    environment:
+      - WATCHTOWER_INCLUDE_RESTARTING=true
+      - WATCHTOWER_REVIVE_STOPPED=false
+      - WATCHTOWER_NO_STARTUP_MESSAGE=false
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /home/ubuntu/.docker/config.json:/config.json:ro
+    restart: unless-stopped
 
 networks:
   pd-network:
