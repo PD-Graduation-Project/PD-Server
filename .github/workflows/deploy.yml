@@ -9,13 +9,22 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
+      - name: Debug SSH connection
+        run: |
+          echo "Testing SSH connection to ${{ secrets.ORACLE_HOST }}"
+          echo "Key starts with: ${{ secrets.SSH_KEY.substring(0, 50) }}"
+          
       - name: Deploy to Oracle VM
         uses: appleboy/ssh-action@v0.1.0
         with:
           host: ${{ secrets.ORACLE_HOST }}
           username: ubuntu
           key: ${{ secrets.SSH_KEY }}
+          debug: true
           script: |
+            whoami
+            pwd
+            ls -la
             cd PD-Server
             git pull origin main
             cd docker
