@@ -154,7 +154,7 @@ services:
         max-file: "3"
 
   watchtower:
-    image: containrrr/watchtower:1.7.1
+    image: containrrr/watchtower:latest
     profiles:
       - prod
     command:
@@ -164,6 +164,7 @@ services:
       - --interval
       - ${WATCHTOWER_INTERVAL:-30}
     environment:
+      - DOCKER_API_VERSION=1.41
       - WATCHTOWER_INCLUDE_RESTARTING=true
       - WATCHTOWER_REVIVE_STOPPED=false
       - WATCHTOWER_NO_STARTUP_MESSAGE=false
