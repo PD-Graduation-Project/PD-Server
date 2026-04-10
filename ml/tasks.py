@@ -73,16 +73,20 @@ def run_inference(session_id: int) -> dict:
             logger.error(f"Session {session_id} not found for ML inference")
             return {"success": False, "error": "Session not found"}
 
-        # Idempotency: skip if already completed or failed
-        if session.ml_status in ("completed", "failed"):
+        # Idempotency: completed sessions can be safely skipped.
+        if session.ml_status == "completed":
             logger.info(
-                f"Session {session_id} already has ml_status={session.ml_status}, skipping"
+                f"Session {session_id} already has ml_status=completed, skipping"
             )
             return {
-                "success": session.ml_status == "completed",
+                "success": True,
                 "ml_score": session.ml_score,
                 "skipped": True,
             }
+
+        # Preserve failure semantics for RQ retries/monitoring.
+        if session.ml_status == "failed":
+            raise RuntimeError(f"Session {session_id} already has ml_status=failed")
 
         try:
             started_at = time.time()
@@ -214,4 +218,4 @@ def run_inference(session_id: int) -> dict:
                     except Exception:
                         db.session.rollback()
 
-            return {"success": False, "error": str(e)}
+            raise
