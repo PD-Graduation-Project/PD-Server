@@ -6,6 +6,7 @@ Runs migrations then starts the server.
 
 import subprocess
 import sys
+import time
 
 
 def run(cmd, check=True, **kwargs):
@@ -26,7 +27,6 @@ def run(cmd, check=True, **kwargs):
 
 def main():
     import os
-    import time
 
     print("Waiting for PostgreSQL to be ready...")
 
@@ -62,17 +62,29 @@ def main():
     run(["flask", "db", "upgrade"])
 
     if os.environ.get("STORAGE_BACKEND") == "s3":
-        print("Creating S3 bucket if needed...")
-        import sys
-
+        print("Waiting for MinIO to be ready...")
         sys.path.insert(0, "/app")
         from utils.s3_storage import get_storage
 
-        get_storage().create_bucket_if_not_exists()
+        max_retries = int(os.environ.get("MINIO_WAIT_MAX_RETRIES", "60"))
+        retry_delay = float(os.environ.get("MINIO_WAIT_RETRY_DELAY", "2"))
+        last_error = None
+        for i in range(max_retries):
+            try:
+                print(f"Creating S3 bucket if needed... ({i + 1}/{max_retries})")
+                get_storage().create_bucket_if_not_exists()
+                break
+            except Exception as exc:
+                last_error = exc
+                print(f"MinIO is unavailable - sleeping ({i + 1}/{max_retries})")
+                time.sleep(retry_delay)
+        else:
+            print("ERROR: MinIO not available in time")
+            if last_error:
+                print(last_error)
+            sys.exit(1)
 
     print("Starting application...")
-    import os
-
     workers = os.environ.get("GUNICORN_WORKERS", "2")
     cmd = (
         sys.argv[1:]
