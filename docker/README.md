@@ -29,6 +29,47 @@ This directory contains Docker configuration for the PD-Server application with 
 
 3. **Done!** Migrations run automatically on first startup.
 
+Note: watchtower runs only in the `prod` compose profile.
+
+## Production Auto-Deploy (GHCR + Watchtower)
+
+Production uses pre-built images from GHCR instead of building on the server.
+
+### How it works
+
+1. Push to `main` triggers `.github/workflows/deploy.yml`
+2. GitHub Actions builds and pushes:
+   - `ghcr.io/<owner>/pd-server-app:latest`
+   - `ghcr.io/<owner>/pd-server-worker:latest`
+   - `ghcr.io/<owner>/pd-server-nginx:latest`
+3. Deploy job SSHes into the server, pulls new images, and recreates services
+4. Watchtower keeps polling GHCR and auto-restarts labeled services when newer images are published
+
+### Required GitHub secrets
+
+- `ORACLE_HOST`: Oracle VM host/IP
+- `SSH_KEY`: private key for `ubuntu` user on server
+- `GHCR_USERNAME`: GitHub username with read access to GHCR packages
+- `GHCR_TOKEN`: GitHub token with at least `read:packages`
+
+### Server prerequisites
+
+Run once on the server as `ubuntu` user:
+
+```bash
+docker login ghcr.io
+```
+
+This creates `/home/ubuntu/.docker/config.json`, which is mounted into the `watchtower` container so it can authenticate when checking GHCR.
+
+The deploy workflow starts compose with `--profile prod`, so watchtower is included only on server deployments.
+
+### Notes
+
+- `app`, `worker`, and `nginx` are labeled for watchtower updates
+- Database and stateful services (`postgres`, `redis`, `minio`) are intentionally excluded from watchtower
+- Local development still works with local builds/images by default
+
 ## Finding Your Server URL
 
 ### For Local Testing (Same Machine)

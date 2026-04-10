@@ -5,9 +5,60 @@ on:
     branches: [main]
   workflow_dispatch:
 
+permissions:
+  contents: read
+  packages: write
+
 jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    outputs:
+      owner_lc: ${{ steps.owner.outputs.owner_lc }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Normalize repository owner
+        id: owner
+        run: echo "owner_lc=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push app image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile.app
+          push: true
+          tags: ghcr.io/${{ steps.owner.outputs.owner_lc }}/pd-server-app:latest
+
+      - name: Build and push worker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile.worker
+          push: true
+          tags: ghcr.io/${{ steps.owner.outputs.owner_lc }}/pd-server-worker:latest
+
+      - name: Build and push nginx image
+        uses: docker/build-push-action@v6
+        with:
+          context: docker/nginx
+          file: docker/nginx/Dockerfile
+          push: true
+          tags: ghcr.io/${{ steps.owner.outputs.owner_lc }}/pd-server-nginx:latest
+
   deploy:
     runs-on: ubuntu-latest
+    needs: build-and-push
+    permissions:
+      contents: read
+      packages: read
     steps:
       - name: Deploy to Oracle VM
         uses: appleboy/ssh-action@v0.1.0
@@ -17,12 +68,14 @@ jobs:
           key: ${{ secrets.SSH_KEY }}
           debug: true
           script: |
-            whoami
-            pwd
-            ls -la
             cd PD-Server
             git pull origin main
             cd docker
-            docker-compose build --parallel
-            docker-compose up -d
-            docker-compose ps
+            docker login ghcr.io -u "${{ secrets.GHCR_USERNAME }}" -p "${{ secrets.GHCR_TOKEN }}"
+            export APP_IMAGE="ghcr.io/${{ needs.build-and-push.outputs.owner_lc }}/pd-server-app:latest"
+            export WORKER_IMAGE="ghcr.io/${{ needs.build-and-push.outputs.owner_lc }}/pd-server-worker:latest"
+            export NGINX_IMAGE="ghcr.io/${{ needs.build-and-push.outputs.owner_lc }}/pd-server-nginx:latest"
+            docker compose pull app worker nginx
+            docker compose --profile prod up -d --remove-orphans
+            docker image prune -f
+            docker compose ps
