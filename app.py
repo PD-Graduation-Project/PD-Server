@@ -346,6 +346,7 @@ def create_app(config_override=None):
         try:
             g.start_time = time.time()
             g.request_id = str(uuid.uuid4())[:8]
+            g.client_ip = _get_client_ip()
             g.skip_access_log = not should_log_request_path(request.path)
 
             if g.skip_access_log:
@@ -358,7 +359,7 @@ def create_app(config_override=None):
                 else request.method
             )
             logger.bind(request_id=g.request_id).info(
-                "→ " + method_token + " " + request.path
+                "→ " + method_token + " " + request.path + " ip=" + g.client_ip
             )
             # Only log body in development, never in production
             if os.environ.get("FLASK_ENV", "production") == "development":
@@ -412,6 +413,8 @@ def create_app(config_override=None):
                     + status_token
                     + " "
                     + duration_token
+                    + " ip="
+                    + g.get("client_ip", _get_client_ip())
                 )
 
             endpoint = request.url_rule.rule if request.url_rule else request.path
