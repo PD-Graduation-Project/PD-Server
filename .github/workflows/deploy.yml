@@ -23,6 +23,6 @@ jobs:
             cd PD-Server
             git pull origin main
             cd docker
-            docker compose --profile prod up -d --build --remove-orphans
+            docker compose -f docker-compose.yml -f docker-compose.monitoring.yml --profile prod up -d --build --remove-orphans
             docker image prune -f
             docker compose ps
