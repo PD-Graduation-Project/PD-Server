@@ -9,11 +9,6 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Debug SSH connection
-        run: |
-          echo "Testing SSH connection to ${{ secrets.ORACLE_HOST }}"
-          echo "Key starts with: ${{ secrets.SSH_KEY.substring(0, 50) }}"
-          
       - name: Deploy to Oracle VM
         uses: appleboy/ssh-action@v0.1.0
         with:
