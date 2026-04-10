@@ -61,17 +61,17 @@ jobs:
       packages: read
     steps:
       - name: Deploy to Oracle VM
-        uses: appleboy/ssh-action@v0.1.0
+        uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.ORACLE_HOST }}
           username: ubuntu
+          port: 22
           key: ${{ secrets.SSH_KEY }}
-          debug: true
           script: |
             cd PD-Server
             git pull origin main
             cd docker
-            docker login ghcr.io -u "${{ secrets.GHCR_USERNAME }}" -p "${{ secrets.GHCR_TOKEN }}"
+            echo "${{ secrets.GHCR_TOKEN }}" | docker login ghcr.io -u "${{ secrets.GHCR_USERNAME }}" --password-stdin
             export APP_IMAGE="ghcr.io/${{ needs.build-and-push.outputs.owner_lc }}/pd-server-app:latest"
             export WORKER_IMAGE="ghcr.io/${{ needs.build-and-push.outputs.owner_lc }}/pd-server-worker:latest"
             export NGINX_IMAGE="ghcr.io/${{ needs.build-and-push.outputs.owner_lc }}/pd-server-nginx:latest"
