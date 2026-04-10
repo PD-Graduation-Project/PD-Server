@@ -14,3 +14,4 @@ loguru==0.7.3
 gunicorn==25.3.0
 gevent==25.9.1
 boto3==1.42.83
+prometheus-client

@@ -85,6 +85,7 @@ def run_inference(session_id: int) -> dict:
             }
 
         try:
+            started_at = time.time()
             ml_score = None
             test_type = session.test_type
 
@@ -159,6 +160,19 @@ def run_inference(session_id: int) -> dict:
             logger.info(
                 f"Inference completed for session {session_id}, score: {ml_score}"
             )
+
+            try:
+                from redis import Redis
+
+                r = Redis.from_url(Config.REDIS_URL)
+                r.incr("pd:ml:completed_total")
+                duration_seconds = max(0.0, time.time() - started_at)
+                r.incrbyfloat("pd:ml:duration_sum_seconds", duration_seconds)
+                r.incr("pd:ml:duration_count")
+                r.close()
+            except Exception:
+                pass
+
             return {
                 "success": True,
                 "ml_score": ml_score,
@@ -168,6 +182,14 @@ def run_inference(session_id: int) -> dict:
 
         except Exception as e:
             logger.exception(f"ML inference failed for session {session_id}: {e}")
+            try:
+                from redis import Redis
+
+                r = Redis.from_url(Config.REDIS_URL)
+                r.incr("pd:ml:failed_total")
+                r.close()
+            except Exception:
+                pass
             # Rollback first to ensure clean state
             db.session.rollback()
 

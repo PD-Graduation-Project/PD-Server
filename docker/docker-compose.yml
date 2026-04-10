@@ -30,8 +30,14 @@ services:
         condition: service_started
     volumes:
       - uploads:/app/uploads
+      - app_logs:/app/logs
     entrypoint: ["python", "docker/entrypoint.py"]
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
       interval: 30s
@@ -76,6 +82,11 @@ services:
         PYTHONPATH=/app rq worker ml
       "
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   postgres:
     image: postgres:15.9-alpine
@@ -91,6 +102,11 @@ services:
       timeout: 5s
       retries: 5
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   redis:
     image: redis:7.4-alpine
@@ -103,6 +119,11 @@ services:
       timeout: 5s
       retries: 5
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   minio:
     image: minio/minio:RELEASE.2025-09-07T16-13-09Z-cpuv1
@@ -117,6 +138,15 @@ services:
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  pd-network:
+    driver: bridge
 
 volumes:
   postgres_data:
@@ -125,3 +155,4 @@ volumes:
   weights:
   torch_cache:
   minio_data:
+  app_logs:

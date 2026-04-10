@@ -9,11 +9,19 @@ import sys
 import threading
 import time
 import uuid
+from datetime import datetime, timezone
 
 from flask import Flask, abort, g, jsonify, request
 from flask_cors import CORS
 from flask_migrate import Migrate
 from loguru import logger
+from prometheus_client import (
+    CONTENT_TYPE_LATEST,
+    Counter,
+    Gauge,
+    Histogram,
+    generate_latest,
+)
 
 from config import Config
 from models.database import db
@@ -62,6 +70,19 @@ def get_status_color(code: int) -> str:
     return "\033[31m"
 
 
+def use_color_logs() -> bool:
+    return os.environ.get("LOG_FORMAT", "pretty") != "json"
+
+
+def should_log_request_path(path: str) -> bool:
+    silent_paths = {
+        p.strip()
+        for p in os.environ.get("LOG_SILENT_PATHS", "/metrics").split(",")
+        if p.strip()
+    }
+    return path not in silent_paths
+
+
 # ── Log record renderer ───────────────────────────────────────────────────────
 def _build_record_str(record: dict, color: bool) -> str:
     request_id = record["extra"].get("request_id")
@@ -86,7 +107,8 @@ def _build_record_str(record: dict, color: bool) -> str:
 
 # ── Sinks ─────────────────────────────────────────────────────────────────────
 def console_sink(message) -> None:
-    sys.stderr.write(_build_record_str(message.record, color=True))
+    use_color = use_color_logs()
+    sys.stderr.write(_build_record_str(message.record, color=use_color))
     sys.stderr.flush()
 
 
@@ -107,14 +129,33 @@ def file_sink(message) -> None:
             os.makedirs("logs", exist_ok=True)
             _log_file = open(f"logs/app_{today}.log", "a", encoding="utf-8")
             _log_file_date = today
-        _log_file.write(_build_record_str(message.record, color=False))  # type: ignore[union-attr]
-        _log_file.flush()  # type: ignore[union-attr]
+
+        log_format = os.environ.get("LOG_FORMAT", "pretty")
+
+        if log_format == "json":
+            import json
+            from datetime import datetime
+
+            log_record = {
+                "timestamp": datetime.utcnow().isoformat(),
+                "level": message.record["level"].name,
+                "message": strip_ansi(message.record["message"]),
+                "request_id": message.record["extra"].get("request_id"),
+            }
+            _log_file.write(json.dumps(log_record) + "\n")
+        else:
+            _log_file.write(_build_record_str(message.record, color=False))
+        _log_file.flush()
 
 
 # ── Logger init ───────────────────────────────────────────────────────────────
 logger.remove()
-logger.add(console_sink, level="DEBUG", format="{message}")
-logger.add(file_sink, level="DEBUG", format="{message}")
+
+log_level = os.environ.get("LOG_LEVEL", "INFO").upper()
+log_format = os.environ.get("LOG_FORMAT", "pretty")
+
+logger.add(console_sink, level=log_level, format="{message}")
+logger.add(file_sink, level=log_level, format="{message}")
 
 # Keep werkzeug startup messages but suppress per-request access lines
 _wz_logger = logging.getLogger("werkzeug")
@@ -130,6 +171,96 @@ class _SuppressAccessLogs(logging.Filter):
 
 
 _wz_logger.addFilter(_SuppressAccessLogs())
+
+# ── Metrics ───────────────────────────────────────────────────────────────────
+HTTP_REQUESTS_TOTAL = Counter(
+    "pd_http_requests_total",
+    "Total HTTP requests",
+    ["method", "endpoint", "status"],
+)
+HTTP_REQUEST_DURATION_SECONDS = Histogram(
+    "pd_http_request_duration_seconds",
+    "HTTP request duration seconds",
+    ["method", "endpoint"],
+)
+HTTP_ERRORS_TOTAL = Counter(
+    "pd_http_errors_total",
+    "HTTP error responses",
+    ["status_class"],
+)
+
+ML_QUEUE_DEPTH = Gauge("pd_ml_queue_depth", "Current ML queue depth")
+ML_QUEUE_OLDEST_SECONDS = Gauge(
+    "pd_ml_queue_oldest_seconds", "Age in seconds of oldest queued ML job"
+)
+DB_CONNECTIONS = Gauge("pd_db_connections", "Active Postgres connections")
+ML_COMPLETED_TOTAL = Gauge("pd_ml_completed_total", "Completed ML jobs total")
+ML_FAILED_TOTAL = Gauge("pd_ml_failed_total", "Failed ML jobs total")
+ML_AVG_DURATION_SECONDS = Gauge(
+    "pd_ml_avg_duration_seconds", "Average ML inference duration in seconds"
+)
+DEPLOY_UNIX_TIME = Gauge("pd_deploy_unix_time", "Current deployment unix timestamp")
+DEPLOY_UNIX_TIME.set(time.time())
+
+
+def _collect_runtime_metrics() -> None:
+    try:
+        db_res = db.session.execute(
+            db.text(
+                "SELECT numbackends FROM pg_stat_database WHERE datname = current_database()"
+            )
+        ).scalar()
+        DB_CONNECTIONS.set(float(db_res or 0))
+    except Exception:
+        pass
+
+    try:
+        from redis import Redis
+
+        r = Redis.from_url(Config.REDIS_URL)
+
+        queue_depth = int(r.llen("rq:queue:ml"))
+        ML_QUEUE_DEPTH.set(queue_depth)
+
+        oldest_seconds = 0.0
+        if queue_depth > 0:
+            oldest_job_id = r.lindex("rq:queue:ml", -1)
+            if oldest_job_id:
+                if isinstance(oldest_job_id, bytes):
+                    oldest_job_id = oldest_job_id.decode("utf-8")
+                enqueued_at = r.hget(f"rq:job:{oldest_job_id}", "enqueued_at")
+                if enqueued_at:
+                    if isinstance(enqueued_at, bytes):
+                        enqueued_at = enqueued_at.decode("utf-8")
+                    try:
+                        enqueued_dt = datetime.fromisoformat(
+                            enqueued_at.replace("Z", "+00:00")
+                        )
+                        now = datetime.now(timezone.utc)
+                        oldest_seconds = max(
+                            0.0,
+                            (
+                                now - enqueued_dt.astimezone(timezone.utc)
+                            ).total_seconds(),
+                        )
+                    except Exception:
+                        oldest_seconds = 0.0
+        ML_QUEUE_OLDEST_SECONDS.set(oldest_seconds)
+
+        completed = float(r.get("pd:ml:completed_total") or 0)
+        failed = float(r.get("pd:ml:failed_total") or 0)
+        duration_sum = float(r.get("pd:ml:duration_sum_seconds") or 0)
+        duration_count = float(r.get("pd:ml:duration_count") or 0)
+
+        ML_COMPLETED_TOTAL.set(completed)
+        ML_FAILED_TOTAL.set(failed)
+        ML_AVG_DURATION_SECONDS.set(
+            duration_sum / duration_count if duration_count > 0 else 0
+        )
+
+        r.close()
+    except Exception:
+        pass
 
 
 # ── App factory ───────────────────────────────────────────────────────────────
@@ -165,20 +296,36 @@ def create_app(config_override=None):
         try:
             g.start_time = time.time()
             g.request_id = str(uuid.uuid4())[:8]
-            method_color = get_method_color(request.method)
+            g.skip_access_log = not should_log_request_path(request.path)
+
+            if g.skip_access_log:
+                return
+
+            colored = use_color_logs()
+            method_token = (
+                get_method_color(request.method) + request.method + RESET
+                if colored
+                else request.method
+            )
             logger.bind(request_id=g.request_id).info(
-                "→ " + method_color + request.method + RESET + " " + request.path
+                "→ " + method_token + " " + request.path
             )
             # Only log body in development, never in production
             if os.environ.get("FLASK_ENV", "production") == "development":
                 body = request.get_data(as_text=True)
                 if body:
                     logger.bind(request_id=g.request_id).debug(
-                        "  Body: " + DIM_YELLOW + body[:500] + RESET
+                        "  Body: "
+                        + ((DIM_YELLOW + body[:500] + RESET) if colored else body[:500])
                     )
                 elif request.form:
                     logger.bind(request_id=g.request_id).debug(
-                        "  Form: " + DIM_YELLOW + str(dict(request.form)) + RESET
+                        "  Form: "
+                        + (
+                            (DIM_YELLOW + str(dict(request.form)) + RESET)
+                            if colored
+                            else str(dict(request.form))
+                        )
                     )
         except Exception:
             pass
@@ -187,24 +334,50 @@ def create_app(config_override=None):
     def log_response(response):
         try:
             duration = (time.time() - g.get("start_time", time.time())) * 1000
-            status_color = get_status_color(response.status_code)
-            method_color = get_method_color(request.method)
-            logger.bind(request_id=g.get("request_id", "N/A")).info(
-                "← "
-                + method_color
-                + request.method
-                + RESET
-                + " "
-                + request.path
-                + " "
-                + status_color
-                + str(response.status_code)
-                + RESET
-                + " "
-                + DIM
-                + f"{duration:.2f}ms"
-                + RESET
-            )
+            if not g.get("skip_access_log", False):
+                colored = use_color_logs()
+                method_token = (
+                    get_method_color(request.method) + request.method + RESET
+                    if colored
+                    else request.method
+                )
+                status_token = (
+                    get_status_color(response.status_code)
+                    + str(response.status_code)
+                    + RESET
+                    if colored
+                    else str(response.status_code)
+                )
+                duration_token = (
+                    DIM + f"{duration:.2f}ms" + RESET
+                    if colored
+                    else f"{duration:.2f}ms"
+                )
+                logger.bind(request_id=g.get("request_id", "N/A")).info(
+                    "← "
+                    + method_token
+                    + " "
+                    + request.path
+                    + " "
+                    + status_token
+                    + " "
+                    + duration_token
+                )
+
+            endpoint = request.url_rule.rule if request.url_rule else request.path
+            HTTP_REQUESTS_TOTAL.labels(
+                method=request.method,
+                endpoint=endpoint,
+                status=str(response.status_code),
+            ).inc()
+            HTTP_REQUEST_DURATION_SECONDS.labels(
+                method=request.method, endpoint=endpoint
+            ).observe(duration / 1000)
+            if response.status_code >= 400:
+                HTTP_ERRORS_TOTAL.labels(
+                    status_class=f"{response.status_code // 100}xx"
+                ).inc()
+
             response.headers["X-Request-ID"] = g.get("request_id", "")
         except Exception:
             pass
@@ -233,6 +406,11 @@ def create_app(config_override=None):
     @app.route("/health", methods=["GET"])
     def health_check():
         return jsonify({"status": "healthy"}), 200
+
+    @app.route("/metrics", methods=["GET"])
+    def metrics():
+        _collect_runtime_metrics()
+        return generate_latest(), 200, {"Content-Type": CONTENT_TYPE_LATEST}
 
     @app.route("/ready", methods=["GET"])
     def readiness_check():

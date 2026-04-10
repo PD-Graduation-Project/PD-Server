@@ -52,6 +52,11 @@ class Config:
     # CORS allowed origins (comma-separated list, empty = deny all)
     CORS_ORIGINS = os.environ.get("CORS_ORIGINS", "")
 
+    # Logging
+    LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO")
+    LOG_FORMAT = os.environ.get("LOG_FORMAT", "pretty")  # pretty or json
+    LOG_SILENT_PATHS = os.environ.get("LOG_SILENT_PATHS", "/metrics")
+
     @staticmethod
     def init_app(app):
         os.makedirs(Config.UPLOAD_FOLDER, exist_ok=True)
