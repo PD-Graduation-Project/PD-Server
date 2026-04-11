@@ -3,6 +3,7 @@ from gevent import monkey
 monkey.patch_all()
 
 import logging
+import io
 import os
 import re
 import sys
@@ -75,11 +76,9 @@ def use_color_logs() -> bool:
 
 
 def should_log_request_path(path: str) -> bool:
-    silent_paths = {
-        p.strip()
-        for p in os.environ.get("LOG_SILENT_PATHS", "/metrics").split(",")
-        if p.strip()
-    }
+    silent_paths = Config.LOG_SILENT_PATHS
+    if isinstance(silent_paths, str):
+        silent_paths = {p.strip() for p in silent_paths.split(",") if p.strip()}
     return path not in silent_paths
 
 
@@ -112,7 +111,7 @@ def console_sink(message) -> None:
     sys.stderr.flush()
 
 
-_log_file = None
+_log_file: io.TextIOWrapper | None = None
 _log_file_date: str | None = None
 _log_lock = threading.Lock()
 
@@ -131,10 +130,23 @@ def file_sink(message) -> None:
             if _log_file:
                 _log_file.close()
             os.makedirs("logs", exist_ok=True)
+            retention_days = Config.LOG_FILE_RETENTION_DAYS
+            if retention_days > 0:
+                cutoff_ts = time.time() - (retention_days * 86400)
+                for entry in os.scandir("logs"):
+                    if not entry.is_file() or not entry.name.startswith("app_"):
+                        continue
+                    try:
+                        if entry.stat().st_mtime < cutoff_ts:
+                            os.remove(entry.path)
+                    except OSError:
+                        pass
             _log_file = open(f"logs/app_{today}.log", "a", encoding="utf-8")
             _log_file_date = today
 
         log_format = os.environ.get("LOG_FORMAT", "pretty")
+        if _log_file is None:
+            return
 
         if log_format == "json":
             import json
