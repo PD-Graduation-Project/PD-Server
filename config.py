@@ -55,7 +55,8 @@ class Config:
     # Logging
     LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO")
     LOG_FORMAT = os.environ.get("LOG_FORMAT", "pretty")  # pretty or json
-    LOG_SILENT_PATHS = os.environ.get("LOG_SILENT_PATHS", "/metrics")
+    LOG_SILENT_PATHS = os.environ.get("LOG_SILENT_PATHS", "/metrics,/health,/ready")
+    LOG_FILE_RETENTION_DAYS = int(os.environ.get("LOG_FILE_RETENTION_DAYS", "7"))
 
     @staticmethod
     def init_app(app):

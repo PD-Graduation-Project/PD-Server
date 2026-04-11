@@ -6,42 +6,103 @@ groups:
         for: 2m
         labels:
           severity: critical
+          service: pd-server
         annotations:
-          summary: "PD-Server API is down"
-          description: "Prometheus cannot scrape the app /metrics endpoint."
+          summary: "PD-Server API unreachable"
+          description: "Prometheus cannot scrape pd-server /metrics for 2 minutes."
+          runbook: "Check app, nginx, and network path."
 
       - alert: HighHostCPU
         expr: (100 * (1 - avg(rate(node_cpu_seconds_total{mode='idle'}[5m])))) > 85
         for: 10m
         labels:
           severity: warning
+          service: host
         annotations:
           summary: "High host CPU"
           description: "Host CPU usage > 85% for 10 minutes."
+          runbook: "Check top processes and request spikes."
 
       - alert: HighHostRAM
         expr: (100 * (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes))) > 85
         for: 10m
         labels:
           severity: warning
+          service: host
         annotations:
           summary: "High host RAM"
           description: "Host RAM usage > 85% for 10 minutes."
+          runbook: "Check memory-heavy processes and container limits."
 
       - alert: MLQueueBacklog
         expr: pd_ml_queue_depth > 10
         for: 10m
         labels:
           severity: warning
+          service: worker
         annotations:
           summary: "ML queue backlog"
           description: "ML queue depth has been > 10 for 10 minutes."
+          runbook: "Scale workers or inspect stuck jobs."
 
       - alert: MLOldestJobStuck
         expr: pd_ml_queue_oldest_seconds > 300
         for: 5m
         labels:
           severity: warning
+          service: worker
         annotations:
           summary: "Oldest ML job is stale"
           description: "Oldest queued ML job age > 300s for 5 minutes."
+          runbook: "Inspect worker logs and retry failed jobs."
+
+      - alert: HTTP5xxSpike
+        expr: sum(rate(pd_http_requests_total{status=~'5..'}[5m])) > 0.5
+        for: 2m
+        labels:
+          severity: critical
+          service: pd-server
+        annotations:
+          summary: "5xx error spike"
+          description: "Server is returning more than 0.5 5xx responses/sec for 2 minutes."
+          runbook: "Check app exceptions, DB/Redis availability, and recent deploy changes."
+
+      - alert: HTTP404Spike
+        expr: sum(rate(pd_http_requests_total{status='404'}[5m])) > 2
+        for: 5m
+        labels:
+          severity: warning
+          service: pd-server
+        annotations:
+          summary: "404 scan traffic spike"
+          description: "404 responses exceed 2 req/sec for 5 minutes (likely route probing)."
+          runbook: "Check top source IPs in nginx/app logs and verify rate limiting."
+
+      - alert: HTTP4xxRatioHigh
+        expr: |
+          (
+            sum(rate(pd_http_requests_total{status=~'4..'}[5m]))
+            /
+            clamp_min(sum(rate(pd_http_requests_total[5m])), 0.001)
+          ) > 0.40
+          and
+          sum(rate(pd_http_requests_total[5m])) > 1
+        for: 5m
+        labels:
+          severity: warning
+          service: pd-server
+        annotations:
+          summary: "High 4xx ratio"
+          description: "4xx responses are > 40% of traffic for 5 minutes with active load."
+          runbook: "Investigate abuse patterns, bad clients, or routing regressions."
+
+      - alert: HTTP429Spike
+        expr: sum(rate(pd_http_requests_total{status='429'}[5m])) > 1
+        for: 5m
+        labels:
+          severity: warning
+          service: pd-server
+        annotations:
+          summary: "Rate limiting heavily triggered"
+          description: "429 responses exceed 1 req/sec for 5 minutes."
+          runbook: "Validate limiter thresholds and check abusive sources."

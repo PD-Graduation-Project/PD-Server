@@ -23,3 +23,34 @@ scrape_configs:
             request_id: request_id
       - labels:
           level:
+
+  - job_name: nginx-access
+    static_configs:
+      - targets: [localhost]
+        labels:
+          job: pd-server
+          service: nginx
+          log_type: access
+          __path__: /var/log/nginx/access.log
+    pipeline_stages:
+      - json:
+          expressions:
+            time: time
+            remote_addr: remote_addr
+            method: method
+            uri: uri
+            status: status
+            request_time: request_time
+      - labels:
+          remote_addr:
+          method:
+          status:
+
+  - job_name: nginx-error
+    static_configs:
+      - targets: [localhost]
+        labels:
+          job: pd-server
+          service: nginx
+          log_type: error
+          __path__: /var/log/nginx/error.log

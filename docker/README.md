@@ -160,6 +160,15 @@ docker-compose exec app flask db migrate -m "your message"
 
 ## Troubleshooting
 
+## Log Retention and Disk Safety
+
+- App daily logs are stored in the `app_logs` volume and auto-pruned by day.
+- Configure retention with `LOG_FILE_RETENTION_DAYS` (default `7`) in `docker/.env.docker`.
+- Health/readiness/metrics request logs are skipped by default via `LOG_SILENT_PATHS`.
+- Nginx access logging is reduced to 4xx/5xx events to control storage growth.
+- Docker container stdout/stderr logs are capped with `max-size=10m` and `max-file=3`.
+- Loki retention is set in `docker/loki-config.yml` (`retention_period: 168h`, i.e. 7 days).
+
 ### Database not connecting?
 Make sure PostgreSQL container is healthy:
 ```bash
