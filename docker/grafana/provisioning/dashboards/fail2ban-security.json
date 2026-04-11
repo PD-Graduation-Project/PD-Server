@@ -75,13 +75,13 @@
             "uid": "loki"
           },
           "editorMode": "builder",
-          "expr": "sum by (jail) (count_over_time({service=\"fail2ban\"} | regexp \".*\\\\[(?P<jail>[^\\\\]]+)\\\\]\\\\s+Ban\\\\s+\\\\S+$\" [15m]))",
+          "expr": "sum by (jail) (count_over_time({service=\"fail2ban\",action=\"Ban\"}[15m]))",
           "legendFormat": "{{jail}}",
           "queryType": "range",
           "refId": "A"
         }
       ],
-      "title": "Bans by Jail (5m)",
+      "title": "Bans by Jail (15m)",
       "type": "timeseries"
     },
     {
@@ -137,13 +137,13 @@
             "uid": "loki"
           },
           "editorMode": "builder",
-          "expr": "sum by (jail) (count_over_time({service=\"fail2ban\"} | regexp \".*\\\\[(?P<jail>[^\\\\]]+)\\\\]\\\\s+Unban\\\\s+\\\\S+$\" [15m]))",
+          "expr": "sum by (jail) (count_over_time({service=\"fail2ban\",action=\"Unban\"}[15m]))",
           "legendFormat": "{{jail}}",
           "queryType": "range",
           "refId": "A"
         }
       ],
-      "title": "Unbans by Jail (5m)",
+      "title": "Unbans by Jail (15m)",
       "type": "timeseries"
     },
     {
@@ -321,7 +321,7 @@
             "uid": "loki"
           },
           "editorMode": "builder",
-          "expr": "topk(10, sum by (ip) (count_over_time({service=\"fail2ban\"} | regexp \".*\\\\] Ban (?P<ip>\\\\S+)$\" [24h])))",
+          "expr": "topk(10, sum by (ip) (count_over_time({service=\"fail2ban\",action=\"Ban\"}[24h])))",
           "queryType": "instant",
           "refId": "A"
         }
@@ -369,7 +369,7 @@
       "type": "logs"
     }
   ],
-  "refresh": "5m",
+      "refresh": "15m",
   "schemaVersion": 39,
   "style": "dark",
   "tags": [
@@ -381,7 +381,7 @@
     "list": []
   },
   "time": {
-    "from": "now-2h",
+    "from": "now-6h",
     "to": "now"
   },
   "timepicker": {},

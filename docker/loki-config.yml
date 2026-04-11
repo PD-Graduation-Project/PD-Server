@@ -21,6 +21,12 @@ limits_config:
   reject_old_samples: true
   reject_old_samples_max_age: 168h
   retention_period: 168h
+  split_queries_by_interval: 1h
+  max_query_parallelism: 8
+  max_query_series: 500
+
+query_range:
+  parallelise_shardable_queries: false
 
 compactor:
   working_directory: /tmp/loki/compactor
