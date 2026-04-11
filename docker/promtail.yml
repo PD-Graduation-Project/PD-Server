@@ -53,3 +53,19 @@ scrape_configs:
           service: nginx
           log_type: error
           __path__: /var/log/nginx/pd_error.log
+
+  - job_name: fail2ban
+    static_configs:
+      - targets: [localhost]
+        labels:
+          job: pd-server
+          service: fail2ban
+          log_type: security
+          __path__: /var/log/fail2ban.log
+    pipeline_stages:
+      - regex:
+          expression: '^\S+\s+\S+\s+\S+\s+\[(?P<pid>\d+)\]:\s+(?P<level>\S+)\s+\[(?P<jail>[^\]]+)\]\s+(?P<action>Ban|Unban)\s+(?P<ip>\S+)'
+      - labels:
+          level:
+          jail:
+          action:

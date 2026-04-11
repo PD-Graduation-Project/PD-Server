@@ -167,6 +167,7 @@ docker-compose exec app flask db migrate -m "your message"
 - Health/readiness/metrics request logs are skipped by default via `LOG_SILENT_PATHS`.
 - Nginx access logging is reduced to 4xx/5xx events to control storage growth.
 - Nginx access logs are ingested by Promtail, but high-cardinality labels are avoided to keep Loki stable.
+- Fail2ban log (`/var/log/fail2ban.log`) is ingested into Loki as `service=fail2ban` for security visibility.
 - Docker container stdout/stderr logs are capped with `max-size=10m` and `max-file=3`.
 - Loki retention is set in `docker/loki-config.yml` (`retention_period: 168h`, i.e. 7 days).
 

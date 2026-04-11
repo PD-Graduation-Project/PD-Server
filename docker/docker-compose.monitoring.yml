@@ -67,6 +67,7 @@ services:
       - ./promtail.yml:/etc/promtail/promtail.yml:ro
       - app_logs:/app/logs:ro
       - nginx_logs:/var/log/nginx:ro
+      - /var/log/fail2ban.log:/var/log/fail2ban.log:ro
     command: -config.file=/etc/promtail/promtail.yml
     restart: unless-stopped
     logging:
