@@ -75,7 +75,7 @@
             "uid": "loki"
           },
           "editorMode": "builder",
-          "expr": "sum by (jail) (count_over_time({service=\"fail2ban\"} |= \" Ban \" [15m]))",
+          "expr": "sum by (jail) (count_over_time({service=\"fail2ban\"} | regexp \".*\\\\[(?P<jail>[^\\\\]]+)\\\\]\\\\s+Ban\\\\s+\\\\S+$\" [15m]))",
           "legendFormat": "{{jail}}",
           "queryType": "range",
           "refId": "A"
@@ -137,7 +137,7 @@
             "uid": "loki"
           },
           "editorMode": "builder",
-          "expr": "sum by (jail) (count_over_time({service=\"fail2ban\"} |= \" Unban \" [15m]))",
+          "expr": "sum by (jail) (count_over_time({service=\"fail2ban\"} | regexp \".*\\\\[(?P<jail>[^\\\\]]+)\\\\]\\\\s+Unban\\\\s+\\\\S+$\" [15m]))",
           "legendFormat": "{{jail}}",
           "queryType": "range",
           "refId": "A"
@@ -201,7 +201,7 @@
             "uid": "loki"
           },
           "editorMode": "builder",
-          "expr": "sum(count_over_time({service=\"fail2ban\"} |= \" Ban \" [24h]))",
+          "expr": "sum(count_over_time({service=\"fail2ban\",action=\"Ban\"}[24h]))",
           "queryType": "instant",
           "refId": "A"
         }
@@ -264,7 +264,7 @@
             "uid": "loki"
           },
           "editorMode": "builder",
-          "expr": "sum(count_over_time({service=\"fail2ban\"} |= \" Unban \" [24h]))",
+          "expr": "sum(count_over_time({service=\"fail2ban\",action=\"Unban\"}[24h]))",
           "queryType": "instant",
           "refId": "A"
         }
@@ -321,7 +321,7 @@
             "uid": "loki"
           },
           "editorMode": "builder",
-          "expr": "topk(10, sum by (ip) (count_over_time({service=\"fail2ban\", action=\"Ban\"}[24h])))",
+          "expr": "topk(10, sum by (ip) (count_over_time({service=\"fail2ban\"} | regexp \".*\\\\] Ban (?P<ip>\\\\S+)$\" [24h])))",
           "queryType": "instant",
           "refId": "A"
         }
@@ -359,12 +359,12 @@
             "uid": "loki"
           },
           "editorMode": "code",
-          "expr": "{service=\"fail2ban\"} |~ \"\\[(sshd|nginx-[^\\]]+)\\]\\s+(Ban|Unban)\\s\"",
+          "expr": "{service=\"fail2ban\",action=~\"Ban|Unban\"}",
           "queryType": "range",
           "refId": "A"
         }
       ],
-      "timeFrom": "30m",
+      "timeFrom": "24h",
       "title": "Recent Ban/Unban Events",
       "type": "logs"
     }
