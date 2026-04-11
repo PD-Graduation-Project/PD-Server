@@ -64,7 +64,7 @@ scrape_configs:
           __path__: /var/log/fail2ban.log
     pipeline_stages:
       - regex:
-          expression: '^\S+\s+\S+\s+\S+\s+\[(?P<pid>\d+)\]:\s+(?P<level>\S+)\s+\[(?P<jail>[^\]]+)\]\s+(?P<action>Ban|Unban)\s+(?P<ip>\S+)'
+          expression: '^\S+\s+\S+\s+\S+\s+\[(?P<pid>\d+)\]:\s+(?P<level>\S+)\s+\[(?P<jail>[^\]]+)\]\s+(?P<action>Found|Ban|Unban)\s+(?P<ip>\S+)'
       - labels:
           level:
           jail:
