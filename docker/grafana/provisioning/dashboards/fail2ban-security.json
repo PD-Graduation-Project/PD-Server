@@ -75,7 +75,7 @@
             "uid": "loki"
           },
           "editorMode": "builder",
-          "expr": "sum by (jail) (count_over_time({service=\"fail2ban\",action=\"Ban\"}[5m]))",
+          "expr": "sum by (jail) (count_over_time({service=\"fail2ban\"} |= \" Ban \" [15m]))",
           "legendFormat": "{{jail}}",
           "queryType": "range",
           "refId": "A"
@@ -137,7 +137,7 @@
             "uid": "loki"
           },
           "editorMode": "builder",
-          "expr": "sum by (jail) (count_over_time({service=\"fail2ban\",action=\"Unban\"}[5m]))",
+          "expr": "sum by (jail) (count_over_time({service=\"fail2ban\"} |= \" Unban \" [15m]))",
           "legendFormat": "{{jail}}",
           "queryType": "range",
           "refId": "A"
@@ -201,8 +201,8 @@
             "uid": "loki"
           },
           "editorMode": "builder",
-          "expr": "sum(count_over_time({service=\"fail2ban\",action=\"Ban\"}[24h]))",
-          "queryType": "range",
+          "expr": "sum(count_over_time({service=\"fail2ban\"} |= \" Ban \" [24h]))",
+          "queryType": "instant",
           "refId": "A"
         }
       ],
@@ -264,8 +264,8 @@
             "uid": "loki"
           },
           "editorMode": "builder",
-          "expr": "sum(count_over_time({service=\"fail2ban\",action=\"Unban\"}[24h]))",
-          "queryType": "range",
+          "expr": "sum(count_over_time({service=\"fail2ban\"} |= \" Unban \" [24h]))",
+          "queryType": "instant",
           "refId": "A"
         }
       ],
@@ -321,8 +321,8 @@
             "uid": "loki"
           },
           "editorMode": "builder",
-          "expr": "topk(10, sum by (ip) (count_over_time({service=\"fail2ban\",action=\"Ban\"}[24h])))",
-          "queryType": "range",
+          "expr": "topk(10, sum by (ip) (count_over_time({service=\"fail2ban\", action=\"Ban\"}[24h])))",
+          "queryType": "instant",
           "refId": "A"
         }
       ],
@@ -344,6 +344,7 @@
       "options": {
         "dedupStrategy": "none",
         "enableLogDetails": true,
+        "maxLines": 200,
         "prettifyLogMessage": false,
         "showCommonLabels": false,
         "showLabels": true,
@@ -358,16 +359,17 @@
             "uid": "loki"
           },
           "editorMode": "code",
-          "expr": "{service=\"fail2ban\"} |~ \"Ban|Unban\"",
+          "expr": "{service=\"fail2ban\"} |~ \"\\[(sshd|nginx-[^\\]]+)\\]\\s+(Ban|Unban)\\s\"",
           "queryType": "range",
           "refId": "A"
         }
       ],
+      "timeFrom": "30m",
       "title": "Recent Ban/Unban Events",
       "type": "logs"
     }
   ],
-  "refresh": "30s",
+  "refresh": "5m",
   "schemaVersion": 39,
   "style": "dark",
   "tags": [
@@ -379,7 +381,7 @@
     "list": []
   },
   "time": {
-    "from": "now-24h",
+    "from": "now-2h",
     "to": "now"
   },
   "timepicker": {},

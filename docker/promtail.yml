@@ -69,3 +69,4 @@ scrape_configs:
           level:
           jail:
           action:
+          ip:
