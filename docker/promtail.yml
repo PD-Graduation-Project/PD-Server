@@ -42,7 +42,6 @@ scrape_configs:
             status: status
             request_time: request_time
       - labels:
-          remote_addr:
           method:
           status:
 
