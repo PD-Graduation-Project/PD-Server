@@ -31,7 +31,7 @@ scrape_configs:
           job: pd-server
           service: nginx
           log_type: access
-          __path__: /var/log/nginx/access.log
+          __path__: /var/log/nginx/pd_access.log
     pipeline_stages:
       - json:
           expressions:
@@ -52,4 +52,4 @@ scrape_configs:
           job: pd-server
           service: nginx
           log_type: error
-          __path__: /var/log/nginx/error.log
+          __path__: /var/log/nginx/pd_error.log
