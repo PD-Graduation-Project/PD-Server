@@ -12,12 +12,12 @@ services:
       - ./prometheus-alerts.yml:/etc/prometheus/prometheus-alerts.yml:ro
       - prometheus_data:/prometheus
     command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
-      - '--storage.tsdb.path=/prometheus'
-      - '--storage.tsdb.retention.time=7d'
-      - '--storage.tsdb.retention.size=2GB'
-      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
-      - '--web.console.templates=/usr/share/prometheus/consoles'
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=7d"
+      - "--storage.tsdb.retention.size=2GB"
+      - "--web.console.libraries=/usr/share/prometheus/console_libraries"
+      - "--web.console.templates=/usr/share/prometheus/consoles"
     restart: unless-stopped
     logging:
       driver: json-file
@@ -80,10 +80,10 @@ services:
     image: prom/node-exporter:v1.8.2
     container_name: node-exporter
     command:
-      - '--path.procfs=/host/proc'
-      - '--path.rootfs=/rootfs'
-      - '--path.sysfs=/host/sys'
-      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+      - "--path.procfs=/host/proc"
+      - "--path.rootfs=/rootfs"
+      - "--path.sysfs=/host/sys"
+      - "--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)"
     volumes:
       - /proc:/host/proc:ro
       - /sys:/host/sys:ro
@@ -129,6 +129,18 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+
+  fail2ban-geo-exporter:
+    build:
+      context: /home/ubuntu/f2b-geo
+      dockerfile: Dockerfile
+    container_name: fail2ban-geo-exporter
+    volumes:
+      - /etc/fail2ban:/etc/fail2ban:ro
+      - /var/lib/fail2ban:/var/lib/fail2ban:ro
+      - /home/ubuntu/f2b-geo/GeoLite2-City.mmdb:/f2b-exporter/db/GeoLite2-City.mmdb:ro
+      - /home/ubuntu/f2b-geo/conf.yml:/f2b-exporter/conf.yml:ro
+    restart: unless-stopped
 
 volumes:
   prometheus_data:
