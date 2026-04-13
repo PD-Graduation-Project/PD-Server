@@ -130,6 +130,25 @@ services:
         max-size: "10m"
         max-file: "3"
 
+  fail2ban-geo-exporter:
+    image: vdcloudcraft/fail2ban-geo-exporter:latest
+    container_name: fail2ban-geo-exporter
+    volumes:
+      - /etc/fail2ban:/etc/fail2ban:ro
+      - /var/lib/fail2ban:/var/lib/fail2ban:ro
+      - ./fail2ban-geo-config:/config:rw
+      - ./geoip-db:/geoip:ro
+    ports:
+      - "9192:9192"
+    environment:
+      - F2B_GEO_PORT=9192
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
 volumes:
   prometheus_data:
   grafana_data:

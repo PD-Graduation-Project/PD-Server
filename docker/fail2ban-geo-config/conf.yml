@@ -1,0 +1,12 @@
+server:
+    listen_address: "0.0.0.0"
+    port: 9192
+geo:
+    enabled: true
+    provider: 'MaxmindDB'
+    enable_grouping: true
+    maxmind:
+        db_path: '/geoip/GeoLite2-City.mmdb'
+f2b:
+    conf_path: '/etc/fail2ban'
+    db: '/var/lib/fail2ban/fail2ban.sqlite3'

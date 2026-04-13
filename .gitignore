@@ -15,3 +15,5 @@ ml/*/weights/
 docker/.env.docker
 docker/.env.docker.bak
 docker/.env.bak
+
+docker/geoip-db/
