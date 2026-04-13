@@ -75,13 +75,13 @@
             "uid": "loki"
           },
           "editorMode": "builder",
-          "expr": "sum by (jail) (count_over_time({service=\"fail2ban\",action=\"Ban\"}[15m]))",
+          "expr": "sum by (jail) (count_over_time({service=\"fail2ban\",action=\"Ban\"}[24h])) - sum by (jail) (count_over_time({service=\"fail2ban\",action=\"Unban\"}[24h]))",
           "legendFormat": "{{jail}}",
           "queryType": "range",
           "refId": "A"
         }
       ],
-      "title": "Bans by Jail (15m)",
+      "title": "Currently Banned by Jail",
       "type": "timeseries"
     },
     {
@@ -137,13 +137,13 @@
             "uid": "loki"
           },
           "editorMode": "builder",
-          "expr": "sum by (jail) (count_over_time({service=\"fail2ban\",action=\"Unban\"}[15m]))",
+          "expr": "sum by (jail) (count_over_time({service=\"fail2ban\",action=\"Ban\"}[24h])) - sum by (jail) (count_over_time({service=\"fail2ban\",action=\"Unban\"}[24h]))",
           "legendFormat": "{{jail}}",
           "queryType": "range",
           "refId": "A"
         }
       ],
-      "title": "Unbans by Jail (15m)",
+      "title": "Total Banned (Net by Jail)",
       "type": "timeseries"
     },
     {

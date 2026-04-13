@@ -24,6 +24,11 @@ COPY . .
 
 COPY docker/entrypoint.py /app/docker/entrypoint.py
 
+FROM base AS prod
+RUN adduser --disabled-password --gecos "" appuser \
+    && chown -R appuser:appuser /app
+USER appuser
+
 EXPOSE 5000
 
 CMD ["gunicorn", "--workers", "4", "--worker-class", "gevent", "--bind", "0.0.0.0:5000", "--preload", "app:create_app()"]
