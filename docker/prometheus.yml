@@ -29,4 +29,4 @@ scrape_configs:
 
   - job_name: "fail2ban-geo"
     static_configs:
-      - targets: ["localhost:9192"]
+      - targets: ["fail2ban-geo-exporter:9192"]
