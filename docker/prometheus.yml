@@ -26,7 +26,3 @@ scrape_configs:
   - job_name: 'fail2ban'
     static_configs:
       - targets: ['fail2ban-exporter:9191']
-
-  - job_name: 'fail2ban-geo'
-    static_configs:
-      - targets: ['fail2ban-geo-exporter:9192']
