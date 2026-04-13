@@ -114,14 +114,15 @@ services:
         max-file: "3"
 
   fail2ban-exporter:
-    image: jnadro/fail2ban-exporter:latest
+    image: registry.gitlab.com/hctrdev/fail2ban-prometheus-exporter:latest
     container_name: fail2ban-exporter
     volumes:
       - /var/run/fail2ban:/var/run/fail2ban:ro
     ports:
       - "9191:9191"
     environment:
-      - F2B_EXPORTER_LISTEN_ADDRESS=0.0.0.0:9191
+      - F2B_COLLECTOR_SOCKET=/var/run/fail2ban/fail2ban.sock
+      - F2B_WEB_LISTEN_ADDRESS=:9191
     restart: unless-stopped
     logging:
       driver: json-file
