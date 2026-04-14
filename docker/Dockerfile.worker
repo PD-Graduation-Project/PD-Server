@@ -17,15 +17,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
+# Copy pre-built praat wheel for ARM64 (avoids long compile)
+COPY praat_parselmouth-0.4.7-cp311-cp311-linux_aarch64.whl /tmp/
+RUN pip install --user --no-cache-dir /tmp/praat_parselmouth-0.4.7-cp311-cp311-linux_aarch64.whl
+
 # PyTorch CPU first — largest layer, benefits most from caching
 RUN pip install --user --no-cache-dir \
     torch==2.6.0 \
     torchvision==0.21.0 \
     --index-url https://download.pytorch.org/whl/cpu
-
-# praat-parselmouth separately — needs cmake/gcc, compiles from source on ARM64
-# Isolating it means the layer is cached unless the version changes
-RUN pip install --user --no-cache-dir praat-parselmouth==0.4.7
 
 # Everything else from requirements + extras
 COPY requirements.txt .
