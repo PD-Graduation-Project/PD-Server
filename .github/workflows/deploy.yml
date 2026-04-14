@@ -101,15 +101,13 @@ jobs:
             # Pull latest images from GHCR
             docker pull ghcr.io/pd-graduation-project/pd-server/pd-app:latest
             docker pull ghcr.io/pd-graduation-project/pd-server/pd-worker:latest
-            docker pull ghcr.io/pd-graduation-project/pd-server/pd-nginx:latest
 
             # Tag for local use
             docker tag ghcr.io/pd-graduation-project/pd-server/pd-app:latest pd-server-app:local
             docker tag ghcr.io/pd-graduation-project/pd-server/pd-worker:latest pd-server-worker:local
-            docker tag ghcr.io/pd-graduation-project/pd-server/pd-nginx:latest pd-server-nginx:local
 
-            # Restart containers with new images
-            docker compose --profile prod up -d --no-build app worker nginx watchtower
+            # Restart containers with new images (skip nginx - unchanged)
+            docker compose --profile prod up -d --no-build app worker watchtower
 
             # Clean up old image layers
             docker image prune -f
