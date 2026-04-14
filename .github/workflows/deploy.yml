@@ -91,6 +91,11 @@ jobs:
           port: 22
           key: ${{ secrets.SSH_KEY }}
           script: |
+            cd ~/PD-Server
+
+            # Pull latest code
+            git pull origin main
+
             cd ~/PD-Server/docker
 
             # Pull latest images from GHCR
