@@ -158,7 +158,7 @@ services:
         max-file: "3"
 
   watchtower:
-    image: containrrr/watchtower:1.7.1 # Pin — never :latest for watchtower itself
+    image: nicholas-fedor/watchtower:latest
     profiles:
       - prod
     command:
@@ -166,7 +166,7 @@ services:
       - --cleanup
       - --rolling-restart
       - --interval
-      - ${WATCHTOWER_INTERVAL:-300} # Was 30 — 30s will rate-limit you on GHCR
+      - ${WATCHTOWER_INTERVAL:-300}
     environment:
       - DOCKER_API_VERSION=1.41
       - WATCHTOWER_INCLUDE_RESTARTING=true

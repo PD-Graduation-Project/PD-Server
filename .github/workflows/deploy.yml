@@ -81,9 +81,9 @@ jobs:
   deploy:
     name: Signal Server to Pull
     runs-on: ubuntu-latest
-    needs: [build-app, build-worker] # Only runs after BOTH images are built
+    needs: [build-app, build-worker]
     steps:
-      - name: SSH and restart via Watchtower
+      - name: SSH and deploy
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.ORACLE_HOST }}
@@ -91,11 +91,17 @@ jobs:
           port: 22
           key: ${{ secrets.SSH_KEY }}
           script: |
-            # Watchtower handles the pull automatically, but we trigger
-            # an immediate check rather than waiting for its poll interval
-            docker run --rm \
-              -v /var/run/docker.sock:/var/run/docker.sock \
-              -v ~/.docker/config.json:/config.json \
-              containrrr/watchtower \
-              --run-once \
-              pd-app pd-worker
+            cd ~/PD-Server/docker
+
+            # Pull latest images from GHCR
+            docker compose pull app worker nginx
+
+            # Restart only changed containers, leave postgres/redis/minio untouched
+            docker compose --profile prod up -d --no-build app worker nginx watchtower
+
+            # Clean up old image layers
+            docker image prune -f
+
+            # Verify everything came up
+            docker compose ps
+            docker compose logs app --tail=20
