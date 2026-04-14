@@ -1,40 +1,41 @@
 services:
   nginx:
-    image: ${NGINX_IMAGE:-pd-server-nginx:local}
-    build:
-      context: ./nginx
-      dockerfile: Dockerfile
+    image: ${NGINX_IMAGE:-ghcr.io/pd-graduation-project/pd-server/pd-nginx:latest}
+    # Remove build: block — CI builds this too
     ports:
-      - "80:80"
-      - "443:443"
+      - "8080:80"
     depends_on:
-      - app
+      app:
+        condition: service_healthy # Wait for app healthcheck, not just container start
     volumes:
       - uploads:/app/uploads
       - nginx_logs:/var/log/nginx
     restart: unless-stopped
     labels:
       - com.centurylinklabs.watchtower.enable=true
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3" # Was missing logging on nginx
 
   app:
-    image: ${APP_IMAGE:-pd-server-app:local}
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile.app
+    image: ${APP_IMAGE:-ghcr.io/pd-graduation-project/pd-server/pd-app:latest}
+    # Remove build: block and target: — CI builds with correct target already
     env_file:
       - .env.docker
     environment:
       - POSTGRES_HOST=postgres
-      - POSTGRES_USER=pduser
-      - POSTGRES_PASSWORD=pdpassword
-      - POSTGRES_DB=pdserver
+      - POSTGRES_USER=${POSTGRES_USER:-pduser}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-pdpassword}
+      - POSTGRES_DB=${POSTGRES_DB:-pdserver}
     depends_on:
       postgres:
         condition: service_healthy
       redis:
-        condition: service_started
+        condition: service_healthy # Was service_started — redis has a healthcheck
       minio:
-        condition: service_started
+        condition: service_healthy # Was service_started — minio has a healthcheck
     volumes:
       - uploads:/app/uploads
       - app_logs:/app/logs
@@ -57,46 +58,29 @@ services:
         ]
       interval: 30s
       timeout: 10s
+      start_period: 40s # Give gunicorn time to boot before healthcheck starts failing
       retries: 3
 
   worker:
-    image: ${WORKER_IMAGE:-pd-server-worker:local}
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile.worker
+    image: ${WORKER_IMAGE:-ghcr.io/pd-graduation-project/pd-server/pd-worker:latest}
+    # Remove build: block
     env_file:
       - .env.docker
     environment:
       - POSTGRES_HOST=postgres
-      - POSTGRES_USER=pduser
-      - POSTGRES_PASSWORD=pdpassword
-      - POSTGRES_DB=pdserver
+      - POSTGRES_USER=${POSTGRES_USER:-pduser}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-pdpassword}
+      - POSTGRES_DB=${POSTGRES_DB:-pdserver}
       - GDRIVE_WEIGHTS_ID=1Svo25SRx7RZ7MW8m1abZerdv7zgypyHT
     depends_on:
       postgres:
         condition: service_healthy
       redis:
-        condition: service_started
+        condition: service_healthy
     volumes:
       - uploads:/app/uploads
       - weights:/app/ml/_FINAL_SCRIPTS/weights
-      - torch_cache:/root/.cache/torch/hub/checkpoints
-    # Download weights into the named volume on first start, then launch the worker
-    command: >
-      sh -c "
-        cd /app/ml/_FINAL_SCRIPTS &&
-        if [ -z \"$$(ls -A weights/*.pth 2>/dev/null)\" ]; then
-          echo 'Downloading model weights...';
-          gdown \"$$GDRIVE_WEIGHTS_ID\" --folder -O weights || { echo 'gdown failed'; exit 1; };
-          echo 'Download complete, checking files:';
-          ls -la weights/;
-        else
-          echo 'Weights already present, skipping download.';
-          ls -la weights/;
-        fi &&
-        cd /app &&
-        PYTHONPATH=/app rq worker ml
-      "
+      - torch_cache:/home/workeruser/.cache/torch/hub/checkpoints
     restart: unless-stopped
     labels:
       - com.centurylinklabs.watchtower.enable=true
@@ -109,13 +93,17 @@ services:
   postgres:
     image: postgres:15.9-alpine
     environment:
-      POSTGRES_USER: pduser
-      POSTGRES_PASSWORD: pdpassword
-      POSTGRES_DB: pdserver
+      POSTGRES_USER: ${POSTGRES_USER:-pduser}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pdpassword}
+      POSTGRES_DB: ${POSTGRES_DB:-pdserver}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U pduser -d pdserver"]
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-pduser} -d ${POSTGRES_DB:-pdserver}",
+        ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -157,8 +145,11 @@ services:
       test:
         [
           "CMD-SHELL",
-          "wget -q -O /dev/null http://localhost:9000/minio/health/live || exit 1",
+          "curl -sf http://localhost:9000/minio/health/live || exit 1",
         ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     restart: unless-stopped
     logging:
       driver: json-file
@@ -167,7 +158,7 @@ services:
         max-file: "3"
 
   watchtower:
-    image: containrrr/watchtower:latest
+    image: containrrr/watchtower:1.7.1 # Pin — never :latest for watchtower itself
     profiles:
       - prod
     command:
@@ -175,7 +166,7 @@ services:
       - --cleanup
       - --rolling-restart
       - --interval
-      - ${WATCHTOWER_INTERVAL:-30}
+      - ${WATCHTOWER_INTERVAL:-300} # Was 30 — 30s will rate-limit you on GHCR
     environment:
       - DOCKER_API_VERSION=1.41
       - WATCHTOWER_INCLUDE_RESTARTING=true
@@ -185,6 +176,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - /home/ubuntu/.docker/config.json:/config.json:ro
     restart: unless-stopped
+    # Intentionally NO watchtower label — it must never update itself
 
 networks:
   pd-network:

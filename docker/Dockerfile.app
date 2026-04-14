@@ -1,34 +1,48 @@
-FROM python:3.11-slim
-
+# ── Stage 1: Build ────────────────────────────────────────────────────────────
+FROM python:3.11-slim AS builder
 WORKDIR /app
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PIP_NO_CACHE_DIR=1 \
-    PIP_DISABLE_PIP_VERSION_CHECK=1
+    PIP_NO_CACHE_DIR=1
 
-# System deps
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     libpq-dev \
-    postgresql-client \
     libev-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Python deps before copying app code (better layer caching)
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --user --no-cache-dir -r requirements.txt
 
-# Copy app code last so code changes don't bust the pip cache layer
-COPY . .
+# ── Stage 2: Production ───────────────────────────────────────────────────────
+FROM python:3.11-slim AS prod
+WORKDIR /app
 
-COPY docker/entrypoint.py /app/docker/entrypoint.py
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PATH=/home/appuser/.local/bin:$PATH
 
-FROM base AS prod
-RUN adduser --disabled-password --gecos "" appuser \
-    && chown -R appuser:appuser /app
+# Only runtime libs — no gcc, no libpq-dev
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libpq5 \
+    libev4 \
+    postgresql-client \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN adduser --disabled-password --gecos "" appuser
+
+RUN mkdir -p /app/logs /app/uploads && chown -R appuser:appuser /app
+
+COPY --from=builder --chown=appuser:appuser /root/.local /home/appuser/.local
+COPY --chown=appuser:appuser . .
+COPY --chown=appuser:appuser docker/entrypoint.py /app/docker/entrypoint.py
+
 USER appuser
-
 EXPOSE 5000
 
-CMD ["gunicorn", "--workers", "4", "--worker-class", "gevent", "--bind", "0.0.0.0:5000", "--preload", "app:create_app()"]
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:5000/health')"
+
+CMD ["gunicorn", "--workers", "4", "--worker-class", "gevent", \
+     "--bind", "0.0.0.0:5000", "--preload", "app:create_app()"]

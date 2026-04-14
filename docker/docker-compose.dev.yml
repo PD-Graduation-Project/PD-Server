@@ -3,9 +3,10 @@ services:
     build:
       context: ..
       dockerfile: docker/Dockerfile.app
-      target: dev # see Dockerfile change below (optional)
     volumes:
-      - ../:/app # live source mount
+      - ../ml:/app/ml
+      - ../app:/app/app
+      - ../requirements.txt:/app/requirements.txt:ro
       - uploads:/app/uploads
       - app_logs:/app/logs
     environment:
@@ -14,7 +15,7 @@ services:
       - PYTHONPATH=/app
     restart: "no"
     ports:
-      - "5000:5000" # hit app directly without going through nginx
+      - "5000:5000"
     labels:
       - com.centurylinklabs.watchtower.enable=false
 
@@ -23,20 +24,25 @@ services:
       context: ..
       dockerfile: docker/Dockerfile.worker
     volumes:
-      - ../:/app
+      - ../ml:/app/ml
+      - ../app:/app/app
+      - ../requirements.txt:/app/requirements.txt:ro
       - uploads:/app/uploads
       - weights:/app/ml/_FINAL_SCRIPTS/weights
-      - torch_cache:/root/.cache/torch/hub/checkpoints # back to /root since user: root
-    user: root
+      - torch_cache:/home/workeruser/.cache/torch/hub/checkpoints
     restart: "no"
     labels:
       - com.centurylinklabs.watchtower.enable=false
 
   nginx:
+    build: # ← was missing, needed for local dev
+      context: ./nginx
+      dockerfile: Dockerfile
+    ports:
+      - "80:80"
     restart: "no"
     labels:
       - com.centurylinklabs.watchtower.enable=false
-    # Optional: comment nginx out entirely in dev and hit :5000 directly
 
   postgres:
     ports:
@@ -49,6 +55,11 @@ services:
     restart: "no"
 
   minio:
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:9000/minio/health/live || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
     ports:
       - "9000:9000"
       - "9001:9001"

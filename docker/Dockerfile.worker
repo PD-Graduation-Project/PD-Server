@@ -1,66 +1,79 @@
-FROM python:3.11-slim
-
-WORKDIR /app
+# ── Stage 1: Builder ─────────────────────────────────────────────────────────
+FROM python:3.11-slim AS builder
+WORKDIR /build
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PIP_NO_CACHE_DIR=1 \
-    PIP_DISABLE_PIP_VERSION_CHECK=1
+    PIP_NO_CACHE_DIR=1
 
-# System deps — combine into one layer, remove build tools after install
+# All build-time tools in one layer
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
-    libc6-dev \
-    libpq-dev \
-    libsndfile1 \
-    ffmpeg \
+    g++ \
     cmake \
-    build-essential \
     make \
     ninja-build \
+    libc6-dev \
+    libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# ── Python deps ──────────────────────────────────────────────────────────────
-# Install torch CPU-only first (saves ~7 GB vs default CUDA build)
-RUN pip install --no-cache-dir \
+# PyTorch CPU first — largest layer, benefits most from caching
+RUN pip install --user --no-cache-dir \
     torch==2.6.0 \
     torchvision==0.21.0 \
     --index-url https://download.pytorch.org/whl/cpu
 
-# All remaining ML deps in one layer
+# praat-parselmouth separately — needs cmake/gcc, compiles from source on ARM64
+# Isolating it means the layer is cached unless the version changes
+RUN pip install --user --no-cache-dir praat-parselmouth==0.4.7
+
+# Everything else from requirements + extras
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt && \
-    pip install --no-cache-dir \
+RUN pip install --user --no-cache-dir -r requirements.txt && \
+    pip install --user --no-cache-dir \
         albumentations==1.3.1 \
         pycatch22 \
-        joblib==1.3.2 \
-        scikit-learn==1.3.2 \
-        pillow==10.1.0 \
-        numpy==1.24.3 \
-        scipy \
-        pandas \
-        matplotlib \
         librosa \
-        praat-parselmouth==0.4.7 \
-        audioread \
         soundfile \
-        soxr \
         numba \
-        msgpack \
-        pooch \
-        decorator \
-        lazy-loader \
-        stopit \
-        pytz \
-        pyyaml \
-        threadpoolctl \
-        gdown
+        soxr \
+        gdown \
+        pandas==3.0.1 \
+        scipy==1.17.1 \
+        matplotlib==3.10.8 \
+        scikit-learn==1.7.2 \
+        joblib==1.5.3 \
+        threadpoolctl==3.6.0
 
-# ── App code ─────────────────────────────────────────────────────────────────
-COPY . .
+# ── Stage 2: Production ───────────────────────────────────────────────────────
+FROM python:3.11-slim
+WORKDIR /app
 
-# Weights are NOT baked into the image — mount them as a volume instead.
-# See docker-compose.yml: volumes: - ./weights:/app/ml/_FINAL_SCRIPTS/weights
-# To pre-download locally: gdown --folder 1Svo25SRx7RZ7MW8m1abZerdv7ZGypyHT -O ./weights
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PATH=/home/workeruser/.local/bin:$PATH \
+    PYTHONPATH=/app:/home/workeruser/.local/lib/python3.11/site-packages
 
-CMD ["rq", "worker", "ml"]
+# Runtime-only — no cmake, no build-essential
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libpq5 \
+    libsndfile1 \
+    ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN adduser --disabled-password --gecos "" workeruser
+
+RUN mkdir -p /app/ml/_FINAL_SCRIPTS/weights /home/workeruser/.cache/gdown /home/workeruser/.cache/torch/hub/checkpoints && chown -R workeruser:workeruser /app/ml /home/workeruser
+
+COPY --from=builder --chown=workeruser:workeruser /root/.local /home/workeruser/.local
+COPY --chown=workeruser:workeruser . .
+
+COPY --chown=workeruser:workeruser docker/worker-entrypoint.sh /app/worker-entrypoint.sh
+RUN chmod +x /app/worker-entrypoint.sh
+
+USER workeruser
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD python -c "import redis; r=redis.from_url('redis://redis:6379'); r.ping()"
+
+ENTRYPOINT ["/app/worker-entrypoint.sh"]
