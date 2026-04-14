@@ -17,8 +17,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy pre-built praat wheel for ARM64 (avoids long compile)
-COPY praat_parselmouth-0.4.7-cp311-cp311-linux_aarch64.whl /tmp/
+    # Copy pre-built praat wheel for ARM64 (avoids long compile)
+    COPY docker/praat_parselmouth-0.4.7-cp311-cp311-linux_aarch64.whl /tmp/
 RUN pip install --user --no-cache-dir /tmp/praat_parselmouth-0.4.7-cp311-cp311-linux_aarch64.whl
 
 # PyTorch CPU first — largest layer, benefits most from caching
