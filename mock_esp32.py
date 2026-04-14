@@ -375,7 +375,9 @@ class MockESP32:
 
 def main():
     parser = argparse.ArgumentParser(description="Mock ESP32 Device for Testing")
-    parser.add_argument("--device-id", default=os.getenv("MOCK_DEVICE_ID"))
+    parser.add_argument(
+        "--device-id", default=os.getenv("MOCK_DEVICE_ID", "ESP32-A1B2C3")
+    )
     parser.add_argument(
         "--server", default=os.getenv("MOCK_SERVER_URL", "http://app:5000")
     )
@@ -408,20 +410,14 @@ def main():
     parser.add_argument(
         "--data-points",
         type=int,
-        default=int(os.getenv("MOCK_DATA_POINTS", "100")),
+        default=int(os.getenv("MOCK_DATA_POINTS", "1000")),
         help="Number of IMU data points per subtest",
     )
     args = parser.parse_args()
 
     print(f"[DEBUG] Factory secret loaded: {args.factory_secret[:10]}...")
 
-    # Generate random device ID if not provided
-    if args.device_id:
-        device_id = args.device_id.upper()
-    else:
-        import secrets
-
-        device_id = f"ESP32-{secrets.token_hex(3).upper()}"
+    device_id = args.device_id.upper()
 
     config = MockESP32Config(
         device_id=device_id,
