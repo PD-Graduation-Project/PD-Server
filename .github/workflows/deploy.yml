@@ -78,10 +78,42 @@ jobs:
           cache-from: type=gha,scope=pd-worker
           cache-to: type=gha,mode=max,scope=pd-worker
 
+  build-nginx:
+    name: Build Nginx Image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and Push Nginx
+        uses: docker/build-push-action@v6
+        with:
+          context: ./docker/nginx
+          file: ./docker/nginx/Dockerfile
+          platforms: linux/arm64
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/pd-nginx:latest
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/pd-nginx:${{ github.sha }}
+          cache-from: type=gha,scope=pd-nginx
+          cache-to: type=gha,mode=max,scope=pd-nginx
+
   deploy:
     name: Signal Server to Pull
     runs-on: ubuntu-latest
-    needs: [build-app, build-worker]
+    needs: [build-app, build-worker, build-nginx]
     steps:
       - name: SSH and deploy
         uses: appleboy/ssh-action@v1.0.3
@@ -101,13 +133,15 @@ jobs:
             # Pull latest images from GHCR
             docker pull ghcr.io/pd-graduation-project/pd-server/pd-app:latest
             docker pull ghcr.io/pd-graduation-project/pd-server/pd-worker:latest
+            docker pull ghcr.io/pd-graduation-project/pd-server/pd-nginx:latest
 
             # Tag for local use
             docker tag ghcr.io/pd-graduation-project/pd-server/pd-app:latest pd-server-app:local
             docker tag ghcr.io/pd-graduation-project/pd-server/pd-worker:latest pd-server-worker:local
+            docker tag ghcr.io/pd-graduation-project/pd-server/pd-nginx:latest pd-server-nginx:local
 
-            # Restart containers with new images (skip nginx - unchanged)
-            docker compose --profile prod up -d --no-build app worker watchtower
+            # Restart containers with new images
+            docker compose --profile prod up -d --no-build app worker nginx watchtower
 
             # Clean up old image layers
             docker image prune -f
