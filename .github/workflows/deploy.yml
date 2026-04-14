@@ -11,7 +11,7 @@ permissions:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: pd-server
+  IMAGE_NAME: pd-graduation-project/pd-server
 
 jobs:
   build-app:
@@ -19,9 +19,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - name: Get repo owner
-        run: echo "REPO_OWNER=${{ github.repository_owner }}" >> $GITHUB_ENV
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
