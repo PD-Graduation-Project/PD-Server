@@ -198,3 +198,4 @@ volumes:
   torch_cache:
   minio_data:
   app_logs:
+  nginx_logs:
