@@ -153,3 +153,4 @@ def remove_push_token():
         db.session.commit()
 
     return jsonify({"success": True}), 200
+# test reload

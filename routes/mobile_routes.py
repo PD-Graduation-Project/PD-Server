@@ -39,6 +39,7 @@ def stream():
 
     def event_stream():
         try:
+            logger.debug(f"Mobile SSE: sending 'connected' event to user={user_id}")
             yield format_sse(event="connected", data={"user_id": user_id})
 
             while True:
@@ -49,12 +50,13 @@ def stream():
                     )
                     yield format_sse(event=msg["event"], data=msg["data"])
                 except queue.Empty:
+                    logger.debug(f"Mobile SSE: sending heartbeat to user={user_id}")
                     yield format_sse(
                         event="heartbeat",
                         data={"timestamp": datetime.utcnow().isoformat()},
                     )
         except GeneratorExit:
-            pass
+            logger.debug(f"Mobile SSE: generator exit for user={user_id}")
         finally:
             logger.info(f"Mobile SSE stream disconnected: user={user_id}")
             mobile_connection_manager.remove(user_id)

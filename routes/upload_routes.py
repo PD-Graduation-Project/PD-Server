@@ -610,6 +610,7 @@ def reset_test(test_id):
     # Get optional new config from request body
     new_config = None
     json_body = request.get_json(silent=True)
+    logger.debug(f"reset test with body: {json_body}")
     if json_body and "config" in json_body:
         new_config = json_body["config"]
         if not isinstance(new_config, dict):

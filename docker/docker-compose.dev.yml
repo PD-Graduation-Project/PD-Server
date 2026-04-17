@@ -4,18 +4,24 @@ services:
       context: ..
       dockerfile: docker/Dockerfile.app
     volumes:
-      - ../ml:/app/ml
-      - ../app:/app/app
-      - ../requirements.txt:/app/requirements.txt:ro
+      - ..:/app
       - uploads:/app/uploads
       - app_logs:/app/logs
     environment:
       - FLASK_ENV=development
       - FLASK_DEBUG=1
       - PYTHONPATH=/app
+    command: sh -c "pip install -r requirements.txt && flask run --host=0.0.0.0 --reload"
     restart: "no"
     ports:
       - "5000:5000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - pd-network
     labels:
       - com.centurylinklabs.watchtower.enable=false
 
@@ -30,31 +36,75 @@ services:
       - uploads:/app/uploads
       - weights:/app/ml/_FINAL_SCRIPTS/weights
       - torch_cache:/home/workeruser/.cache/torch/hub/checkpoints
+    command: sh -c "pip install -r requirements.txt && watchmedo auto-restart --directory=/app --pattern=*.py --recursive --debug-force-polling -- celery -A app.celery worker --loglevel=info"
     restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - pd-network
     labels:
       - com.centurylinklabs.watchtower.enable=false
 
   nginx:
-    build: # ← was missing, needed for local dev
+    build:
       context: ./nginx
       dockerfile: Dockerfile
     ports:
       - "80:80"
     restart: "no"
+    depends_on:
+      - app
+    networks:
+      - pd-network
     labels:
       - com.centurylinklabs.watchtower.enable=false
 
   postgres:
+    image: postgres:15.9-alpine
+    environment:
+      POSTGRES_USER: pduser
+      POSTGRES_PASSWORD: pdpassword
+      POSTGRES_DB: pdserver
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pduser -d pdserver"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
     ports:
-      - "5432:5432"
+      - "5433:5432"
+    networks:
+      - pd-network
     restart: "no"
 
   redis:
+    image: redis:7.4-alpine
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
     ports:
-      - "6379:6379"
+      - "6380:6379"
+    networks:
+      - pd-network
     restart: "no"
 
   minio:
+    image: minio/minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: f39235d1f228ecd110d7b6a2c9ebadbd
+    volumes:
+      - minio_data:/data
     healthcheck:
       test: ["CMD", "mc", "ready", "local"]
       interval: 10s
@@ -64,8 +114,54 @@ services:
     ports:
       - "9000:9000"
       - "9001:9001"
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - pd-network
     restart: "no"
+
+  pgadmin:
+    image: dpage/pgadmin4
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    environment:
+      - PGADMIN_DEFAULT_EMAIL=admin@admin.com
+      - PGADMIN_DEFAULT_PASSWORD=admin
+      - PGADMIN_LISTEN_ADDRESS=0.0.0.0
+    networks:
+      - pd-network
+    ports:
+      - "5050:80"
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    logging:
+      driver: "none"
+
+  redis-commander:
+    image: rediscommander/redis-commander
+    environment:
+      - REDIS_HOSTS=local:redis:6379
+    networks:
+      - pd-network
+    ports:
+      - "8081:8081"
+    restart: "no"
+    depends_on:
+      redis:
+        condition: service_healthy
+    logging:
+      driver: "none"
 
 networks:
   pd-network:
     driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:
+  minio_data:
+  pgadmin_data:
+
