@@ -148,3 +148,123 @@ class TestUserRoutes:
         assert "success" in data
         assert "data" in data
         assert data["success"] is True
+
+    def test_add_push_token_without_auth_returns_401(self, client):
+        """POST /api/user/push-token should return 401 without authentication"""
+        response = client.post("/api/user/push-token", json={"push_token": "test"})
+        assert response.status_code == 401
+
+    def test_add_push_token_missing_token_returns_400(self, client, auth_headers):
+        """POST /api/user/push-token should return 400 when push_token is missing"""
+        response = client.post("/api/user/push-token", headers=auth_headers, json={})
+        assert response.status_code == 400
+
+    def test_add_push_token_success(self, client, auth_headers, test_user, db_session):
+        """POST /api/user/push-token should add push token to user"""
+        response = client.post(
+            "/api/user/push-token",
+            headers=auth_headers,
+            json={"push_token": "ExponentPushToken-abc123"},
+        )
+        assert response.status_code == 200
+        data = response.get_json()
+        assert data["success"] is True
+
+        db_session.refresh(test_user)
+        assert test_user.push_token == ["ExponentPushToken-abc123"]
+
+    def test_add_push_token_duplicate_does_not_duplicate(
+        self, client, auth_headers, test_user, db_session
+    ):
+        """POST /api/user/push-token should not add duplicate tokens"""
+        test_user.push_token = ["ExponentPushToken-abc123"]
+        db_session.commit()
+
+        response = client.post(
+            "/api/user/push-token",
+            headers=auth_headers,
+            json={"push_token": "ExponentPushToken-abc123"},
+        )
+        assert response.status_code == 200
+
+        db_session.refresh(test_user)
+        assert test_user.push_token == ["ExponentPushToken-abc123"]
+
+    def test_add_push_token_multiple_tokens(
+        self, client, auth_headers, test_user, db_session
+    ):
+        """POST /api/user/push-token should allow multiple tokens"""
+        test_user.push_token = ["ExponentPushToken-abc123"]
+        db_session.commit()
+
+        response = client.post(
+            "/api/user/push-token",
+            headers=auth_headers,
+            json={"push_token": "ExponentPushToken-xyz789"},
+        )
+        assert response.status_code == 200
+
+        db_session.refresh(test_user)
+        assert "ExponentPushToken-abc123" in test_user.push_token
+        assert "ExponentPushToken-xyz789" in test_user.push_token
+
+    def test_remove_push_token_without_auth_returns_401(self, client):
+        """DELETE /api/user/push-token should return 401 without authentication"""
+        response = client.delete("/api/user/push-token", json={"push_token": "test"})
+        assert response.status_code == 401
+
+    def test_remove_push_token_missing_token_returns_400(self, client, auth_headers):
+        """DELETE /api/user/push-token should return 400 when push_token is missing"""
+        response = client.delete("/api/user/push-token", headers=auth_headers, json={})
+        assert response.status_code == 400
+
+    def test_remove_push_token_success(
+        self, client, auth_headers, test_user, db_session
+    ):
+        """DELETE /api/user/push-token should remove push token"""
+        test_user.push_token = ["ExponentPushToken-abc123", "ExponentPushToken-xyz789"]
+        db_session.commit()
+
+        response = client.delete(
+            "/api/user/push-token",
+            headers=auth_headers,
+            json={"push_token": "ExponentPushToken-abc123"},
+        )
+        assert response.status_code == 200
+
+        db_session.refresh(test_user)
+        assert test_user.push_token == ["ExponentPushToken-xyz789"]
+
+    def test_remove_push_token_not_in_list(
+        self, client, auth_headers, test_user, db_session
+    ):
+        """DELETE /api/user/push-token should handle token not in list"""
+        test_user.push_token = ["ExponentPushToken-abc123"]
+        db_session.commit()
+
+        response = client.delete(
+            "/api/user/push-token",
+            headers=auth_headers,
+            json={"push_token": "ExponentPushToken-notexists"},
+        )
+        assert response.status_code == 200
+
+        db_session.refresh(test_user)
+        assert test_user.push_token == ["ExponentPushToken-abc123"]
+
+    def test_remove_push_token_sets_null_when_empty(
+        self, client, auth_headers, test_user, db_session
+    ):
+        """DELETE /api/user/push-token should set null when last token removed"""
+        test_user.push_token = ["ExponentPushToken-abc123"]
+        db_session.commit()
+
+        response = client.delete(
+            "/api/user/push-token",
+            headers=auth_headers,
+            json={"push_token": "ExponentPushToken-abc123"},
+        )
+        assert response.status_code == 200
+
+        db_session.refresh(test_user)
+        assert test_user.push_token is None

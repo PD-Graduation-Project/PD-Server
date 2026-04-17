@@ -113,6 +113,26 @@ def run_inference(session_id: int) -> dict:
             session.ml_job_id = None
             db.session.commit()
 
+            # Send Expo Push when the ml score is done
+            try:
+                user = db.session.get(User, session.user_id)
+                push_tokens = user.push_token or [] if user else []
+                if push_tokens:
+                    from utils.expo_push import send_expo_push
+
+                    send_expo_push(
+                        push_tokens=push_tokens,
+                        title=f"{test_type.capitalize()} Test Complete",
+                        body=f"Your {test_type} test results are ready",
+                        data={
+                            "test_id": session.id,
+                            "test_type": test_type,
+                            "ml_score": ml_score,
+                        },
+                    )
+            except Exception as push_error:
+                logger.error(f"Failed to send push notification: {push_error}")
+
             group_completed = False
             group_overall_score = None
 

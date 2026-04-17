@@ -51,6 +51,9 @@ class User(db.Model):
     Q27 = db.Column(db.Boolean, nullable=True)
     Q28 = db.Column(db.Boolean, nullable=True)
 
+    # Expo push tokens (multiple devices supported)
+    push_token = db.Column(db.JSON, nullable=True)  # ["token1", "token2", ...]
+
     # Relationship to refresh tokens
     refresh_tokens = db.relationship(
         "RefreshToken", back_populates="user", cascade="all, delete-orphan"

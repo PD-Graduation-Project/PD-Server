@@ -31,7 +31,17 @@ def mock_ml_predictor_e2e():
         patch("ml.predictor.predict_questionnaire", return_value=0.5),
         patch("ml.overall_model.predict_overall", return_value=0.5),
         patch("routes.upload_routes.get_ml_queue", return_value=mock_queue),
+        patch("routes.esp32_routes.connection_manager") as mock_esp32,
+        patch("routes.mobile_routes.mobile_connection_manager") as mock_mobile,
     ):
+        mock_esp32.add = MagicMock()
+        mock_esp32.remove = MagicMock()
+        mock_esp32.is_connected = MagicMock(return_value=True)
+        mock_esp32.send_event = MagicMock(return_value=True)
+        mock_mobile.add = MagicMock()
+        mock_mobile.remove = MagicMock()
+        mock_mobile.is_connected = MagicMock(return_value=True)
+        mock_mobile.send_event = MagicMock(return_value=True)
         yield
 
 

@@ -1,5 +1,19 @@
+import pytest
+from unittest.mock import patch, MagicMock
+
 from models.database import db
 from models.test_models import ESP32Device
+
+
+@pytest.fixture
+def mock_esp32_connection_manager():
+    """Mock the ESP32 connection manager for SSE tests."""
+    with patch("routes.esp32_routes.connection_manager") as mock:
+        mock.add = MagicMock()
+        mock.remove = MagicMock()
+        mock.is_connected = MagicMock(return_value=True)
+        mock.send_event = MagicMock(return_value=True)
+        yield mock
 
 
 class TestESP32Register:
@@ -173,13 +187,17 @@ class TestESP32Heartbeat:
 
 
 class TestESP32Stream:
-    def test_stream_returns_sse_content_type(self, client, esp32_api_key_headers):
+    def test_stream_returns_sse_content_type(
+        self, client, esp32_api_key_headers, mock_esp32_connection_manager
+    ):
         """Stream returns text/event-stream content type."""
         response = client.get(
             "/api/esp32/stream",
             headers=esp32_api_key_headers,
         )
+        assert response.status_code == 200
         assert "text/event-stream" in response.content_type
+        response.close()
 
     def test_stream_unauthorized(self, client):
         """Stream without auth returns 401."""

@@ -11,8 +11,7 @@ from werkzeug.utils import secure_filename
 
 from config import Config
 
-# Base upload directory (absolute path to avoid issues when cwd changes)
-UPLOAD_DIR = Path(__file__).parent.parent / "uploads"
+UPLOAD_DIR = Path(Config.UPLOAD_FOLDER)
 
 # Thread pool for async IMU file writes
 # max_workers=4 handles up to 4 simultaneous writes (22 subtests/hand combos max)

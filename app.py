@@ -1,6 +1,10 @@
-from gevent import monkey
+import os
+import sys
 
-monkey.patch_all()
+if os.environ.get("GEVENT_PATCH", "true").lower() == "true":
+    from gevent import monkey
+
+    monkey.patch_all()
 
 import logging
 import io
@@ -453,6 +457,7 @@ def create_app(config_override=None):
     from routes.esp32_routes import esp32_bp
     from routes.file_routes import file_bp
     from routes.group_routes import group_bp
+    from routes.mobile_routes import mobile_bp
     from routes.questionnaire_routes import questionnaire_bp
     from routes.test_routes import test_bp
     from routes.upload_routes import upload_bp
@@ -467,6 +472,7 @@ def create_app(config_override=None):
     app.register_blueprint(esp32_bp)
     app.register_blueprint(esp32_devices_bp)
     app.register_blueprint(file_bp)
+    app.register_blueprint(mobile_bp)
 
     @app.route("/health", methods=["GET"])
     def health_check():

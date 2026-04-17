@@ -16,7 +16,7 @@ class Config:
 
     # File upload settings
     MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # 16MB max file size
-    UPLOAD_FOLDER = "uploads"
+    UPLOAD_FOLDER = os.environ.get("UPLOAD_FOLDER", "uploads")
     ALLOWED_EXTENSIONS = {
         "audio": ["mp3", "wav", "m4a"],
         "image": ["png", "jpg", "jpeg", "gif"],
@@ -67,6 +67,9 @@ class Config:
         for p in os.environ.get("RATE_LIMIT_EXEMPT_PATHS", "").split(",")
         if p.strip()
     }
+
+    # Expo Push notification settings
+    EXPO_ACCESS_TOKEN = os.environ.get("EXPO_ACCESS_TOKEN")
 
     @staticmethod
     def init_app(app):

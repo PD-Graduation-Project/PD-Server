@@ -91,3 +91,65 @@ def delete_user():
     except Exception as e:
         db.session.rollback()
         return jsonify({"success": False, "error": str(e)}), 500
+
+
+@user_bp.route("/push-token", methods=["POST"])
+@authenticate
+def add_push_token():
+    """Register Expo push token for the current user.
+
+    Body: { "push_token": "ExponentPushToken-xxx" }
+    """
+    current_user = db.session.get(User, g.user_id)
+    if not current_user:
+        return jsonify({"error": "User not found"}), 404
+
+    raw_body, error = get_json_body(request)
+    if error:
+        return error
+    assert raw_body is not None
+
+    push_token = raw_body.get("push_token")
+    if not push_token:
+        return jsonify({"error": "push_token is required"}), 400
+
+    if not isinstance(push_token, str):
+        return jsonify({"error": "push_token must be a string"}), 400
+
+    current_tokens = current_user.push_token or []
+
+    if push_token not in current_tokens:
+        new_tokens = current_tokens + [push_token]
+        current_user.push_token = new_tokens
+        db.session.commit()
+
+    return jsonify({"success": True}), 200
+
+
+@user_bp.route("/push-token", methods=["DELETE"])
+@authenticate
+def remove_push_token():
+    """Remove Expo push token from the current user.
+
+    Body: { "push_token": "ExponentPushToken-xxx" }
+    """
+    current_user = db.session.get(User, g.user_id)
+    if not current_user:
+        return jsonify({"error": "User not found"}), 404
+
+    raw_body, error = get_json_body(request)
+    if error:
+        return error
+    assert raw_body is not None
+
+    push_token = raw_body.get("push_token")
+    if not push_token:
+        return jsonify({"error": "push_token is required"}), 400
+
+    current_tokens = current_user.push_token or []
+    if push_token in current_tokens:
+        new_tokens = [t for t in current_tokens if t != push_token]
+        current_user.push_token = new_tokens if new_tokens else None
+        db.session.commit()
+
+    return jsonify({"success": True}), 200

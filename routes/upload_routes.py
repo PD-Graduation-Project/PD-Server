@@ -12,6 +12,7 @@ from models.database import db
 from models.test_models import TestGroup, TestInput, TestSession
 from models.user import User
 from utils.esp32_connection_manager import connection_manager
+from utils.mobile_connection_manager import mobile_connection_manager
 from utils.storage import (
     delete_file,
     generate_drawing_filename,
@@ -33,6 +34,31 @@ upload_bp = Blueprint("upload", __name__, url_prefix="/api/tests")
 def get_ml_queue():
     """Get the RQ queue for ML inference jobs."""
     return Queue("ml", connection=Redis.from_url(Config.REDIS_URL))
+
+
+def _get_next_subtest_info(test_session, uploaded_subtest):
+    """Calculate next pending subtests for the tremor test."""
+    config = test_session.config or {}
+
+    all_subtests = [str(i) for i in range(11)]
+    enabled_subtests = [s for s in all_subtests if config.get(s, True)]
+
+    completed_subtests = set()
+    for inp in test_session.inputs:
+        if inp.input_type == "tremor_gyro" and inp.file_path:
+            for subtest in enabled_subtests:
+                if subtest in inp.file_path:
+                    completed_subtests.add(subtest)
+
+    completed_subtests.add(uploaded_subtest)
+
+    next_enabled = [s for s in enabled_subtests if s not in completed_subtests]
+
+    return {
+        "uploaded_subtest": uploaded_subtest,
+        "next_enabled_subtests": next_enabled[:5],
+        "completed_subtests": list(completed_subtests),
+    }
 
 
 @upload_bp.route("/<int:test_id>/tremor", methods=["POST"])
@@ -61,12 +87,12 @@ def upload_tremor(test_id):
     content_type = request.content_type or ""
 
     if "application/json" in content_type or request.get_json(silent=True):
-        return _upload_tremor_json(test_id, test_session)
+        return _upload_tremor_json(test_id, test_session, current_user)
     else:
-        return _upload_tremor_file(test_id, test_session)
+        return _upload_tremor_file(test_id, test_session, current_user)
 
 
-def _upload_tremor_json(test_id, test_session):
+def _upload_tremor_json(test_id, test_session, current_user):
     """Handle JSON body upload with IMU data arrays."""
     data = request.get_json()
     if not data:
@@ -85,7 +111,9 @@ def _upload_tremor_json(test_id, test_session):
     hand = (
         "l"
         if hand_raw.lower() in ("left", "l")
-        else "r" if hand_raw.lower() in ("right", "r") else None
+        else "r"
+        if hand_raw.lower() in ("right", "r")
+        else None
     )
     if not hand:
         return (
@@ -140,6 +168,16 @@ def _upload_tremor_json(test_id, test_session):
 
     db.session.commit()
 
+    subtest_info = _get_next_subtest_info(test_session, subtest_str)
+    mobile_connection_manager.send_event(
+        current_user.id,
+        "next_subtest",
+        {
+            "test_id": test_id,
+            **subtest_info,
+        },
+    )
+
     return (
         jsonify(
             {
@@ -157,7 +195,7 @@ def _upload_tremor_json(test_id, test_session):
     )
 
 
-def _upload_tremor_file(test_id, test_session):
+def _upload_tremor_file(test_id, test_session, current_user):
     """Handle multipart/form-data file upload."""
     subtest = request.form.get("subtest")
     hand = request.form.get("hand")
@@ -211,6 +249,16 @@ def _upload_tremor_file(test_id, test_session):
         test_session.status = "in_progress"
 
     db.session.commit()
+
+    subtest_info = _get_next_subtest_info(test_session, subtest)
+    mobile_connection_manager.send_event(
+        current_user.id,
+        "next_subtest",
+        {
+            "test_id": test_id,
+            **subtest_info,
+        },
+    )
 
     return (
         jsonify(
