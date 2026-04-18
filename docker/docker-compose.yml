@@ -63,7 +63,10 @@ services:
 
   worker:
     image: ${WORKER_IMAGE:-ghcr.io/pd-graduation-project/pd-server/pd-worker:latest}
-    # Remove build: block
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+      target: prod
     env_file:
       - .env.docker
     environment:
@@ -81,6 +84,7 @@ services:
       - uploads:/app/uploads
       - weights:/app/ml/_FINAL_SCRIPTS/weights
       - torch_cache:/home/workeruser/.cache/torch/hub/checkpoints
+      - pip_cache:/home/workeruser/.cache/pip
     restart: unless-stopped
     labels:
       - com.centurylinklabs.watchtower.enable=true
@@ -188,3 +192,4 @@ volumes:
   minio_data:
   app_logs:
   nginx_logs:
+  pip_cache:

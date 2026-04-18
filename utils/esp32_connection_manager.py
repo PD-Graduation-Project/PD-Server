@@ -1,10 +1,10 @@
 import json
 import queue
 import threading
-import time
+from datetime import datetime
 
-import redis
 from loguru import logger
+from redis import ConnectionPool, Redis
 
 from config import Config
 
@@ -17,16 +17,20 @@ class ESP32ConnectionManager:
     """
 
     CONNECTION_KEY_PREFIX = "esp32:conn:"
-    CONNECTION_TTL = 60
+    CONNECTION_TTL = 90  # longer than heartbeat interval (60s) to avoid flapping
 
     def __init__(self):
-        self._redis_url = Config.REDIS_URL
+        self._pool = ConnectionPool.from_url(
+            Config.REDIS_URL,
+            decode_responses=True,
+            max_connections=20,
+        )
         self._lock = threading.Lock()
-        self._local_listeners = {}
+        self._local_listeners: dict = {}
 
-    def _get_redis_client(self):
-        """Get a new Redis client instance."""
-        return redis.from_url(self._redis_url, decode_responses=True)
+    def _redis(self) -> Redis:
+        """Get a client from the shared pool - no new connection each time."""
+        return Redis(connection_pool=self._pool)
 
     def _conn_key(self, user_id):
         return f"{self.CONNECTION_KEY_PREFIX}{user_id}"
@@ -39,116 +43,97 @@ class ESP32ConnectionManager:
         If a connection already exists for this user, it will be replaced after
         proper cleanup of the old connection.
         """
+        # Clean up any existing connection for this user first
+        self._cleanup_local(user_id)
+
         channel = f"esp32:user:{user_id}"
+        r = self._redis()
+        pubsub = r.pubsub(ignore_subscribe_messages=True)
+        pubsub.subscribe(channel)
 
-        try:
-            redis_client = self._get_redis_client()
-            pubsub = redis_client.pubsub()
-            pubsub.subscribe(channel)
+        stop_event = threading.Event()
+        thread = threading.Thread(
+            target=self._listen,
+            args=(pubsub, message_queue, user_id, stop_event),
+            daemon=True,
+            name=f"esp32-listener-{user_id}",
+        )
+        thread.start()
 
-            stop_event = threading.Event()
-            listener_thread = threading.Thread(
-                target=self._listen_to_redis,
-                args=(pubsub, message_queue, user_id, stop_event),
-                daemon=True,
-            )
-            listener_thread.start()
+        with self._lock:
+            self._local_listeners[user_id] = {
+                "device_id": device_id,
+                "pubsub": pubsub,
+                "thread": thread,
+                "stop_event": stop_event,
+                "queue": message_queue,
+            }
 
-            with self._lock:
-                self._local_listeners[user_id] = {
-                    "device_id": device_id,
-                    "redis_client": redis_client,
-                    "pubsub": pubsub,
-                    "thread": listener_thread,
-                    "stop_event": stop_event,
-                    "queue": message_queue,
-                }
+        r.hset(
+            self._conn_key(user_id),
+            mapping={
+                "device_id": device_id,
+                "connected": "1",
+            },
+        )
+        r.expire(self._conn_key(user_id), self.CONNECTION_TTL)
 
-            redis_client.hset(
-                self._conn_key(user_id),
-                mapping={
-                    "device_id": device_id,
-                    "connected": "1",
-                },
-            )
-            redis_client.expire(self._conn_key(user_id), self.CONNECTION_TTL)
+        logger.info(f"ESP32 connected: device={device_id} user={user_id}")
 
-            logger.info(f"ESP32 connected: device={device_id} user={user_id}")
-
-        except Exception as e:
-            logger.error(f"ESP32 connect failed for user={user_id}: {e}")
-            raise
-
-    def _listen_to_redis(self, pubsub, local_queue, user_id, stop_event):
+    def _listen(self, pubsub, local_queue, user_id, stop_event):
         """Background thread that listens to Redis pub/sub and forwards to local queue."""
         try:
             while not stop_event.is_set():
-                try:
-                    message = pubsub.get_message(timeout=1.0)
-                    if message and message["type"] == "message":
-                        try:
-                            data = json.loads(message["data"])
-                            event = data.get("event")
-                            event_data = data.get("data")
-                            local_queue.put_nowait(
-                                {"event": event, "data": json.dumps(event_data)}
-                            )
-                            logger.debug(
-                                f"ESP32 event queued: '{event}' for user={user_id}"
-                            )
-                        except queue.Full:
-                            logger.warning(
-                                f"ESP32 event queue full for user={user_id}, dropping message"
-                            )
-                        except json.JSONDecodeError:
-                            logger.error(
-                                f"ESP32 invalid JSON in Redis message for user={user_id}"
-                            )
-                except Exception as e:
-                    if not stop_event.is_set():
-                        logger.debug(f"ESP32 pubsub error for user={user_id}: {e}")
+                message = pubsub.get_message(timeout=1.0)
+                if not message:
                     continue
+
+                try:
+                    data = json.loads(message["data"])
+                    local_queue.put_nowait(
+                        {"event": data["event"], "data": json.dumps(data["data"])}
+                    )
+                except queue.Full:
+                    logger.warning(f"ESP32 queue full for user={user_id}, dropping message")
+                except (json.JSONDecodeError, KeyError) as e:
+                    logger.error(f"ESP32 bad message for user={user_id}: {e}")
         except Exception as e:
-            logger.error(f"ESP32 Redis listener crashed for user={user_id}: {e}")
+            if not stop_event.is_set():
+                logger.error(f"ESP32 listener crashed for user={user_id}: {e}")
+
+    def _cleanup_local(self, user_id):
+        """Stop listener thread and pubsub for a user, if any."""
+        with self._lock:
+            conn = self._local_listeners.pop(user_id, None)
+            if not conn:
+                return
+
+            conn["stop_event"].set()
+            try:
+                conn["pubsub"].unsubscribe()
+                conn["pubsub"].close()
+            except Exception:
+                pass
 
     def remove(self, user_id):
         """Remove an ESP32 SSE connection and unsubscribe from Redis channel."""
-        channel = f"esp32:user:{user_id}"
-
+        # Get device_id before cleanup for logging
         with self._lock:
-            conn = self._local_listeners.pop(user_id, None)
-            if conn:
-                stop_event = conn.get("stop_event")
-                if stop_event:
-                    stop_event.set()
-                try:
-                    conn["pubsub"].unsubscribe(channel)
-                    conn["pubsub"].close()
-                    redis_client = conn.get("redis_client")
-                    if redis_client:
-                        redis_client.close()
-                except Exception as e:
-                    logger.error(f"ESP32 disconnect error for user={user_id}: {e}")
-            else:
-                logger.warning(
-                    f"ESP32 disconnect: no local listener for user={user_id}"
-                )
+            conn = self._local_listeners.get(user_id)
+            device_id = conn.get("device_id") if conn else None
 
-        try:
-            redis_client = self._get_redis_client()
-            redis_client.delete(self._conn_key(user_id))
-            redis_client.close()
-        except Exception as e:
-            logger.error(f"ESP32 redis disconnect error for user={user_id}: {e}")
+        self._cleanup_local(user_id)
 
-        logger.info(f"ESP32 disconnected: user={user_id}")
+        r = self._redis()
+        r.delete(self._conn_key(user_id))
+
+        logger.info(f"ESP32 disconnected: device={device_id or 'unknown'} user={user_id}")
 
     def get(self, user_id):
         """Get connection info for a user's ESP32."""
         try:
-            redis_client = self._get_redis_client()
-            data = redis_client.hgetall(self._conn_key(user_id))
-            redis_client.close()
+            r = self._redis()
+            data = r.hgetall(self._conn_key(user_id))
             if data and data.get("connected") == "1":
                 return {
                     "device_id": data.get("device_id"),
@@ -159,18 +144,15 @@ class ESP32ConnectionManager:
             logger.error(f"ESP32 get connection failed for user={user_id}: {e}")
             return None
 
-    def is_connected(self, user_id):
+    def is_connected(self, user_id) -> bool:
         """Check if user has an active ESP32 connection."""
         try:
-            redis_client = self._get_redis_client()
-            connected = redis_client.hget(self._conn_key(user_id), "connected")
-            redis_client.close()
-            return connected == "1"
-        except Exception as e:
-            logger.error(f"ESP32 is_connected failed for user={user_id}: {e}")
+            r = self._redis()
+            return r.hget(self._conn_key(user_id), "connected") == "1"
+        except Exception:
             return False
 
-    def send_event(self, user_id, event, data):
+    def send_event(self, user_id, event, data) -> bool:
         """
         Send an SSE event to a user's connected ESP32 device via Redis pub/sub.
 
@@ -180,58 +162,51 @@ class ESP32ConnectionManager:
             data: Dict to be JSON-serialized as event data
 
         Returns:
-            True if event was published, False if no connection or Redis error
+            True if event was published and had listeners, False otherwise
         """
-        if not self.is_connected(user_id):
-            logger.warning(
-                f"ESP32 send_event: no connection for user={user_id}, event='{event}' dropped"
-            )
-            return False
-
         channel = f"esp32:user:{user_id}"
         message = json.dumps({"event": event, "data": data})
 
         try:
-            redis_client = self._get_redis_client()
-            redis_client.publish(channel, message)
-            redis_client.close()
+            r = self._redis()
+            receivers = r.publish(channel, message)
+            if receivers == 0:
+                logger.warning(
+                    f"ESP32 event '{event}' for user={user_id} - no listeners"
+                )
+                return False
             logger.info(f"ESP32 event sent: '{event}' to user={user_id}")
             return True
         except Exception as e:
             logger.error(f"ESP32 send_event failed for user={user_id}: {e}")
             return False
 
-    def get_connected_devices(self):
+    def get_connected_devices(self) -> list:
         """Get list of all connected device user IDs."""
         try:
-            redis_client = self._get_redis_client()
-            keys = redis_client.keys(f"{self.CONNECTION_KEY_PREFIX}*")
+            r = self._redis()
+            keys = r.keys(f"{self.CONNECTION_KEY_PREFIX}*")
             result = []
             for key in keys:
-                try:
-                    user_id = int(key.replace(self.CONNECTION_KEY_PREFIX, ""))
-                except ValueError:
-                    continue
-                data = redis_client.hgetall(key)
-                if data and data.get("connected") == "1":
-                    result.append(
-                        {
-                            "user_id": user_id,
-                            "device_id": data.get("device_id"),
-                        }
-                    )
-            redis_client.close()
+                data = r.hgetall(key)
+                if data.get("connected") == "1":
+                    try:
+                        user_id = int(key.replace(self.CONNECTION_KEY_PREFIX, ""))
+                        result.append(
+                            {"user_id": user_id, "device_id": data.get("device_id")}
+                        )
+                    except ValueError:
+                        pass
             return result
         except Exception as e:
             logger.error(f"ESP32 get_connected_devices failed: {e}")
             return []
 
-    def _heartbeat(self, user_id):
+    def heartbeat(self, user_id):
         """Refresh connection TTL (called by heartbeat endpoint)."""
         try:
-            redis_client = self._get_redis_client()
-            redis_client.expire(self._conn_key(user_id), self.CONNECTION_TTL)
-            redis_client.close()
+            r = self._redis()
+            r.expire(self._conn_key(user_id), self.CONNECTION_TTL)
         except Exception:
             pass
 
