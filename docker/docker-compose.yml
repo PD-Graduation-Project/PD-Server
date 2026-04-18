@@ -159,7 +159,7 @@ services:
         max-file: "3"
 
   watchtower:
-    image: nicholas-fedor/watchtower:latest
+    image: containrrr/watchtower:1.7.1
     profiles:
       - prod
     command:
