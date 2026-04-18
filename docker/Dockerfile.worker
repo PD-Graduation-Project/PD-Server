@@ -17,10 +17,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
-    # Copy pre-built praat wheel for ARM64 (avoids long compile)
-    COPY docker/praat_parselmouth-0.4.7-cp311-cp311-linux_aarch64.whl /tmp/
-RUN pip install --user --no-cache-dir /tmp/praat_parselmouth-0.4.7-cp311-cp311-linux_aarch64.whl
-
 # PyTorch CPU first — largest layer, benefits most from caching
 RUN pip install --user --no-cache-dir \
     torch==2.6.0 \
@@ -28,8 +24,15 @@ RUN pip install --user --no-cache-dir \
     --index-url https://download.pytorch.org/whl/cpu
 
 # praat-parselmouth — separate stage so it can be excluded from dev
+# CI can pass --build-arg USE_LOCAL_PRAAT_WHEEL=true to use local wheel for ARM64
 FROM builder AS praat-builder
-RUN pip install --user --no-cache-dir praat-parselmouth==0.4.7
+ARG USE_LOCAL_PRAAT_WHEEL=false
+COPY docker/praat_parselmouth-0.4.7-cp311-cp311-linux_aarch64.whl /tmp/ 2>/dev/null || true
+RUN if [ "$USE_LOCAL_PRAAT_WHEEL" = "true" ] && [ -f /tmp/praat_parselmouth-*.whl ]; then \
+        pip install --user --no-cache-dir /tmp/praat_parselmouth-*.whl; \
+    else \
+        pip install --user --no-cache-dir praat-parselmouth==0.4.7; \
+    fi
 
 # Main builder without praat
 FROM builder AS base-deps
@@ -119,8 +122,10 @@ RUN mkdir -p /app/ml/_FINAL_SCRIPTS/weights /home/workeruser/.cache/gdown /home/
     && chown -R workeruser:workeruser /app/ml /home/workeruser
 
 # Copy base deps only (no praat) — will be installed at runtime via command
-# Skip COPY . . — dev compose mounts volumes over this anyway
 COPY --from=base-deps --chown=workeruser:workeruser /root/.local /home/workeruser/.local
+
+# Copy source code so RQ can discover ml.tasks
+COPY --chown=workeruser:workeruser . .
 
 # Copy entrypoint for dev (needed even with volume mounts)
 COPY --chown=workeruser:workeruser docker/worker-entrypoint.sh /app/worker-entrypoint.sh

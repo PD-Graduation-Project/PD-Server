@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from flask import Blueprint, g, jsonify, request
+from flask import Blueprint, g, json, jsonify, request
 from loguru import logger
 from redis import Redis
 from rq import Queue
@@ -85,7 +85,9 @@ def _upload_tremor_json(test_id, test_session):
     hand = (
         "l"
         if hand_raw.lower() in ("left", "l")
-        else "r" if hand_raw.lower() in ("right", "r") else None
+        else "r"
+        if hand_raw.lower() in ("right", "r")
+        else None
     )
     if not hand:
         return (
@@ -491,7 +493,7 @@ def complete_test(test_id):
     ml_status = "processing"
     try:
         queue = get_ml_queue()
-        job = queue.enqueue(run_inference, test_session.id, job_timeout="5m")
+        job = queue.enqueue("ml.tasks.run_inference", test_session.id, job_timeout="5m")
         test_session.ml_job_id = job.id
         ml_job_id = job.id
         db.session.commit()
@@ -560,10 +562,22 @@ def reset_test(test_id):
             )
 
     # Get optional new config from request body
+    json_body = request.get_json(silent=True) or {}
+    # Check if config is at root level or inside "config" key
     new_config = None
-    json_body = request.get_json(silent=True)
-    if json_body and "config" in json_body:
+    if "config" in json_body:
         new_config = json_body["config"]
+        # Unwrap "subtest" key if present (mobile app sends nested format)
+        if isinstance(new_config, dict) and "subtest" in new_config:
+            new_config = new_config["subtest"]
+    elif any(
+        k in json_body for k in ("0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10")
+    ):
+        # Config sent directly at root level
+        new_config = json_body
+        logger.info(f"Using root-level config: {new_config}")
+
+    if new_config is not None:
         if not isinstance(new_config, dict):
             return jsonify({"error": "config must be an object"}), 400
         valid_keys = {"0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10"}
@@ -608,6 +622,7 @@ def reset_test(test_id):
     # Update config if new config provided
     if new_config is not None:
         test_session.config = new_config
+        logger.info(f"Updated test {test_id} config to: {new_config}")
 
     # Reset group state if applicable
     if test_session.group_id:
