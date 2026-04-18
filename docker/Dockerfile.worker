@@ -1,4 +1,4 @@
-# ── Stage 1: Builder ─────────────────────────────────────────────────────────
+# ── Stage 1: Base Builder ─────────────────────────────────────────────────────
 FROM python:3.11-slim AS builder
 WORKDIR /build
 
@@ -27,7 +27,12 @@ RUN pip install --user --no-cache-dir \
     torchvision==0.21.0 \
     --index-url https://download.pytorch.org/whl/cpu
 
-# Everything else from requirements + extras
+# praat-parselmouth — separate stage so it can be excluded from dev
+FROM builder AS praat-builder
+RUN pip install --user --no-cache-dir praat-parselmouth==0.4.7
+
+# Main builder without praat
+FROM builder AS base-deps
 COPY requirements.txt .
 RUN pip install --user --no-cache-dir -r requirements.txt && \
     pip install --user --no-cache-dir \
@@ -45,14 +50,18 @@ RUN pip install --user --no-cache-dir -r requirements.txt && \
         joblib==1.5.3 \
         threadpoolctl==3.6.0
 
+# Merge all deps into single location (avoids double-COPY overwrite issues)
+FROM base-deps AS final-deps
+COPY --from=praat-builder /root/.local /root/.local
+
 # ── Stage 2: Production ───────────────────────────────────────────────────────
-FROM python:3.11-slim
+FROM python:3.11-slim AS prod
 WORKDIR /app
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PATH=/home/workeruser/.local/bin:$PATH \
-    PYTHONPATH=/app:/home/workeruser/.local/lib/python3.11/site-packages
+    PYTHONPATH=/app
 
 # Runtime-only — no cmake, no build-essential
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -65,7 +74,8 @@ RUN adduser --disabled-password --gecos "" workeruser
 
 RUN mkdir -p /app/ml/_FINAL_SCRIPTS/weights /home/workeruser/.cache/gdown /home/workeruser/.cache/torch/hub/checkpoints && chown -R workeruser:workeruser /app/ml /home/workeruser
 
-COPY --from=builder --chown=workeruser:workeruser /root/.local /home/workeruser/.local
+# Single COPY from merged final-deps stage
+COPY --from=final-deps --chown=workeruser:workeruser /root/.local /home/workeruser/.local
 COPY --chown=workeruser:workeruser . .
 
 COPY --chown=workeruser:workeruser docker/worker-entrypoint.sh /app/worker-entrypoint.sh
@@ -73,7 +83,50 @@ RUN chmod +x /app/worker-entrypoint.sh
 
 USER workeruser
 
+# Healthcheck uses Celery ping only — fail if worker not ready
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD python -c "import redis; r=redis.from_url('redis://redis:6379'); r.ping()"
+    CMD celery -A app.celery inspect ping --timeout 5 -d celery@$HOSTNAME
 
 ENTRYPOINT ["/app/worker-entrypoint.sh"]
+
+# ── Stage 3: Development ───────────────────────────────────────────────────────
+FROM python:3.11-slim AS dev
+WORKDIR /app
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PATH=/home/workeruser/.local/bin:$PATH \
+    PYTHONPATH=/app \
+    FLASK_DEBUG=1
+
+# Dev needs build tools to compile praat-parselmouth at runtime
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    g++ \
+    cmake \
+    make \
+    ninja-build \
+    libc6-dev \
+    libpq-dev \
+    libpq5 \
+    libsndfile1 \
+    ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN adduser --disabled-password --gecos "" workeruser
+
+RUN mkdir -p /app/ml/_FINAL_SCRIPTS/weights /home/workeruser/.cache/gdown /home/workeruser/.cache/torch/hub/checkpoints /home/workeruser/.cache/pip \
+    && chown -R workeruser:workeruser /app/ml /home/workeruser
+
+# Copy base deps only (no praat) — will be installed at runtime via command
+# Skip COPY . . — dev compose mounts volumes over this anyway
+COPY --from=base-deps --chown=workeruser:workeruser /root/.local /home/workeruser/.local
+
+# Copy entrypoint for dev (needed even with volume mounts)
+COPY --chown=workeruser:workeruser docker/worker-entrypoint.sh /app/worker-entrypoint.sh
+RUN chmod +x /app/worker-entrypoint.sh
+
+USER workeruser
+
+# Dev uses hot-reload; praat installed at runtime via command
+CMD ["sh", "-c", "pip install --user praat-parselmouth==0.4.7 && /app/worker-entrypoint.sh"]

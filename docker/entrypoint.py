@@ -32,28 +32,20 @@ def main():
 
     max_retries = 30
     for i in range(max_retries):
-        result = subprocess.run(
-            [
-                "psql",
-                "-h",
-                os.environ.get("POSTGRES_HOST", "localhost"),
-                "-U",
-                os.environ.get("POSTGRES_USER", "pduser"),
-                "-d",
-                os.environ.get("POSTGRES_DB", "pdserver"),
-                "-c",
-                "\\q",
-            ],
-            env={
-                **os.environ,
-                "PGPASSWORD": os.environ.get("POSTGRES_PASSWORD", "pdpassword"),
-            },
-            capture_output=True,
-        )
-        if result.returncode == 0:
+        try:
+            import psycopg2
+            conn = psycopg2.connect(
+                host=os.environ.get("POSTGRES_HOST", "localhost"),
+                user=os.environ.get("POSTGRES_USER", "pduser"),
+                password=os.environ.get("POSTGRES_PASSWORD", "pdpassword"),
+                dbname=os.environ.get("POSTGRES_DB", "pdserver"),
+                connect_timeout=1,
+            )
+            conn.close()
             break
-        print(f"PostgreSQL is unavailable - sleeping ({i + 1}/{max_retries})")
-        time.sleep(1)
+        except Exception:
+            print(f"PostgreSQL is unavailable - sleeping ({i + 1}/{max_retries})")
+            time.sleep(1)
     else:
         print("ERROR: PostgreSQL not available after 30 seconds")
         sys.exit(1)
@@ -101,7 +93,8 @@ def main():
             "app:create_app()",
         ]
     )
-    run(cmd, check=False)
+    result = run(cmd, check=False)
+    sys.exit(result.returncode)
 
 
 if __name__ == "__main__":
