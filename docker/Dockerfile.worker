@@ -24,15 +24,10 @@ RUN pip install --user --no-cache-dir \
     --index-url https://download.pytorch.org/whl/cpu
 
 # praat-parselmouth — separate stage so it can be excluded from dev
-# CI can pass --build-arg USE_LOCAL_PRAAT_WHEEL=true to use local wheel for ARM64
+# Try to use local wheel if available, fall back to PyPI
 FROM builder AS praat-builder
-ARG USE_LOCAL_PRAAT_WHEEL=false
-COPY docker/praat_parselmouth-0.4.7-cp311-cp311-linux_aarch64.whl /tmp/ 2>/dev/null || true
-RUN if [ "$USE_LOCAL_PRAAT_WHEEL" = "true" ] && [ -f /tmp/praat_parselmouth-*.whl ]; then \
-        pip install --user --no-cache-dir /tmp/praat_parselmouth-*.whl; \
-    else \
-        pip install --user --no-cache-dir praat-parselmouth==0.4.7; \
-    fi
+COPY docker/praat_parselmouth-0.4.7-cp311-cp311-linux_aarch64.whl /tmp/praat.whl 2>/dev/null || true
+RUN pip install --user --no-cache-dir /tmp/praat.whl 2>/dev/null || pip install --user --no-cache-dir praat-parselmouth==0.4.7
 
 # Main builder without praat
 FROM builder AS base-deps

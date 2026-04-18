@@ -24,10 +24,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    command: >
-      sh -c "pip install --user watchfiles &&
-             flask db upgrade &&
-             flask run --host=0.0.0.0 --port=5000 --reload"
+    command:
+      sh -c "pip install --user watchfiles && flask db upgrade && flask run --host=0.0.0.0 --port=5000 --reload"
 
   worker:
     build:
@@ -42,6 +40,7 @@ services:
       - weights:/app/ml/_FINAL_SCRIPTS/weights
       - torch_cache:/home/workeruser/.cache/torch/hub/checkpoints
       - pip_cache:/home/workeruser/.cache/pip
+      - ../docker/praat_parselmouth-0.4.7-cp311-cp311-linux_aarch64.whl:/home/workeruser/praat_parselmouth-0.4.7-cp311-cp311-linux_aarch64.whl:ro
     environment:
       - FLASK_DEBUG=1
       - PYTHONPATH=/app
@@ -54,9 +53,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    command: >
-      sh -c "pip install --user praat-parselmouth==0.4.7 rq &&
-           watchfiles 'rq worker ml' /app/app /app/ml"
+    command:
+      sh -c "pip install --no-cache-dir /home/workeruser/praat_parselmouth-0.4.7-cp311-cp311-linux_aarch64.whl rq || pip install praat-parselmouth==0.4.7 rq && watchfiles 'rq worker ml' /app/app /app/ml"
 
   nginx:
     build:

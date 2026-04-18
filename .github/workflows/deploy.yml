@@ -72,8 +72,6 @@ jobs:
           file: ./docker/Dockerfile.worker
           platforms: linux/arm64
           push: true
-          build-args: |
-            USE_LOCAL_PRAAT_WHEEL: "true"
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/pd-worker:latest
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/pd-worker:${{ github.sha }}
