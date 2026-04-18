@@ -26,8 +26,8 @@ RUN pip install --user --no-cache-dir \
 # praat-parselmouth — use local wheel, fail if missing
 FROM builder AS praat-builder
 WORKDIR /tmp
-COPY docker/praat_parselmouth-0.4.7-cp311-cp311-linux_aarch64.whl ./praat.whl
-RUN pip install --user --no-cache-dir ./praat.whl
+COPY docker/praat_parselmouth-0.4.7-cp311-cp311-linux_aarch64.whl .
+RUN pip install --user --no-cache-dir praat_parselmouth-0.4.7-cp311-cp311-linux_aarch64.whl
 
 # Main builder without praat
 FROM builder AS base-deps
