@@ -71,6 +71,7 @@ jobs:
           context: .
           file: ./docker/Dockerfile.worker
           platforms: linux/arm64
+          target: prod
           push: true
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/pd-worker:latest
