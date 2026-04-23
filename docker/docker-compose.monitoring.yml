@@ -140,6 +140,7 @@ services:
     volumes:
       - /etc/fail2ban:/etc/fail2ban:ro
       - /var/lib/fail2ban:/var/lib/fail2ban:ro
+      - /var/run/fail2ban:/var/run/fail2ban:ro
       - /home/ubuntu/f2b-geo/geoip/GeoLite2-City.mmdb:/f2b-exporter/db/GeoLite2-City.mmdb:ro
       - /home/ubuntu/f2b-geo/conf.yml:/f2b-exporter/conf.yml:ro
     restart: unless-stopped
