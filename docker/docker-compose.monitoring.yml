@@ -135,6 +135,8 @@ services:
       context: /home/ubuntu/f2b-geo
       dockerfile: Dockerfile
     container_name: fail2ban-geo-exporter
+    group_add:
+      - 1002
     volumes:
       - /etc/fail2ban:/etc/fail2ban:ro
       - /var/lib/fail2ban:/var/lib/fail2ban:ro
