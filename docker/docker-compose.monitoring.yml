@@ -120,6 +120,8 @@ services:
       - /var/run/fail2ban:/var/run/fail2ban:ro
     ports:
       - "9191:9191"
+    group_add:
+      - 1002
     environment:
       - F2B_COLLECTOR_SOCKET=/var/run/fail2ban/fail2ban.sock
       - F2B_WEB_LISTEN_ADDRESS=:9191
