@@ -6,6 +6,12 @@ services:
     volumes:
       - ../ml:/app/ml
       - ../app:/app/app
+      - ../routes:/app/routes
+      - ../utils:/app/utils
+      - ../models:/app/models
+      - ../migrations:/app/migrations
+      - ../app.py:/app/app.py
+      - ../config.py:/app/config.py
       - ../requirements.txt:/app/requirements.txt:ro
       - uploads:/app/uploads
       - app_logs:/app/logs

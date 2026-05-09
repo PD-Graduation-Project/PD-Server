@@ -54,6 +54,22 @@ scrape_configs:
           log_type: error
           __path__: /var/log/nginx/pd_error.log
 
+  - job_name: esp32-device-logs
+    static_configs:
+      - targets: [localhost]
+        labels:
+          job: pd-server
+          service: esp32-device
+          __path__: /app/logs/esp32/**/*.log
+    pipeline_stages:
+      - json:
+          expressions:
+            device_id: device_id
+            log_type: log_type
+      - labels:
+          device_id:
+          log_type:
+
   - job_name: fail2ban
     static_configs:
       - targets: [localhost]
