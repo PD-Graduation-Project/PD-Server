@@ -65,9 +65,11 @@ scrape_configs:
       - json:
           expressions:
             device_id: device_id
+            level: level
             log_type: log_type
       - labels:
           device_id:
+          level:
           log_type:
 
   - job_name: fail2ban

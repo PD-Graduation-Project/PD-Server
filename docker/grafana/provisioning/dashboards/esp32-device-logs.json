@@ -34,7 +34,7 @@
         {
           "datasource": { "type": "loki", "uid": "loki" },
           "editorMode": "code",
-          "expr": "{service=\"esp32-device\", device_id=~\"$device_id\"} | json | line_format \"{{.message}}\"",
+          "expr": "{service=\"esp32-device\", device_id=~\"$device_id\", level=~\"$level\"} | json | line_format \"{{.message}}\"",
           "queryType": "range",
           "refId": "A"
         }
@@ -63,7 +63,23 @@
         "skipUrlSync": false,
         "sort": 1,
         "type": "query"
-      }
+      },
+      {
+        "current": { "selected": true, "text": "All", "value": ".*" },
+        "datasource": { "type": "loki", "uid": "loki" },
+        "definition": "label_values(level)",
+        "hide": 0,
+        "includeAll": true,
+        "multi": true,
+        "name": "level",
+        "options": [],
+        "query": "label_values(level)",
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 1,
+        "type": "query"
+      },
     ]
   },
   "time": { "from": "now-1h", "to": "now" },

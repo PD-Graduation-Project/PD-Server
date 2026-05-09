@@ -14,7 +14,7 @@ from utils.storage import UPLOAD_DIR, _get_storage_backend, get_file_extension
 
 ESP32_LOG_DIR = Path("/app/logs/esp32")
 
-ALLOWED_LOG_EXTENSIONS = {"log", "txt"}
+ALLOWED_LOG_EXTENSIONS = {"log", "txt", "json", "jsonl"}
 MAX_LOG_FILE_SIZE = 16 * 1024 * 1024
 
 
@@ -69,21 +69,53 @@ def save_log_file(file, device_id: str, filename: str, log_type: Optional[str] =
     return file_path, file_size
 
 
-def _append_to_promtail(content: bytes, device_id: str, timestamp: str, log_type: Optional[str] = None):
+def _parse_esp32_log_line(raw: str) -> Optional[dict]:
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(parsed, dict):
+        return None
+    return {
+        "ts": parsed.get("timestamp", ""),
+        "level": parsed.get("level", "UNKNOWN"),
+        "service": parsed.get("service", ""),
+        "test_id": parsed.get("test_id"),
+        "message": parsed.get("message", raw),
+    }
+
+
+def _append_to_promtail(content: bytes, device_id: str, upload_time: str, log_type: Optional[str] = None):
     try:
         promtail_path = _get_promtail_path(device_id)
         decoded = content.decode("utf-8", errors="replace")
         with open(promtail_path, "a", encoding="utf-8") as f:
             for raw_line in decoded.split("\n"):
                 line = raw_line.strip()
-                if line:
-                    entry = json.dumps({
-                        "timestamp": timestamp,
+                if not line:
+                    continue
+                parsed = _parse_esp32_log_line(line)
+                if parsed:
+                    entry = {
+                        "timestamp": parsed["ts"] or upload_time,
                         "device_id": device_id,
+                        "level": parsed["level"],
+                        "service": parsed["service"],
+                        "test_id": parsed["test_id"],
+                        "log_type": log_type or "unknown",
+                        "message": parsed["message"],
+                    }
+                else:
+                    entry = {
+                        "timestamp": upload_time,
+                        "device_id": device_id,
+                        "level": "RAW",
+                        "service": "",
+                        "test_id": None,
                         "log_type": log_type or "unknown",
                         "message": line,
-                    }, ensure_ascii=False)
-                    f.write(entry + "\n")
+                    }
+                f.write(json.dumps(entry, ensure_ascii=False) + "\n")
     except Exception as e:
         logger.error(f"Failed to append to Promtail file for {device_id}: {e}")
 
