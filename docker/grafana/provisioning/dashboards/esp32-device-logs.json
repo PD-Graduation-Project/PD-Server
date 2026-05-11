@@ -79,7 +79,7 @@
         "skipUrlSync": false,
         "sort": 1,
         "type": "query"
-      },
+      }
     ]
   },
   "time": { "from": "now-1h", "to": "now" },

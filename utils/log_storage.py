@@ -1,3 +1,4 @@
+import fcntl
 import json
 import os
 import uuid
@@ -90,34 +91,54 @@ def _append_to_promtail(content: bytes, device_id: str, upload_time: str, log_ty
         promtail_path = _get_promtail_path(device_id)
         decoded = content.decode("utf-8", errors="replace")
         with open(promtail_path, "a", encoding="utf-8") as f:
-            for raw_line in decoded.split("\n"):
-                line = raw_line.strip()
-                if not line:
-                    continue
-                parsed = _parse_esp32_log_line(line)
-                if parsed:
-                    entry = {
-                        "timestamp": parsed["ts"] or upload_time,
-                        "device_id": device_id,
-                        "level": parsed["level"],
-                        "service": parsed["service"],
-                        "test_id": parsed["test_id"],
-                        "log_type": log_type or "unknown",
-                        "message": parsed["message"],
-                    }
-                else:
-                    entry = {
-                        "timestamp": upload_time,
-                        "device_id": device_id,
-                        "level": "RAW",
-                        "service": "",
-                        "test_id": None,
-                        "log_type": log_type or "unknown",
-                        "message": line,
-                    }
-                f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+            fcntl.flock(f.fileno(), fcntl.LOCK_EX)
+            try:
+                for raw_line in decoded.split("\n"):
+                    line = raw_line.strip()
+                    if not line:
+                        continue
+                    parsed = _parse_esp32_log_line(line)
+                    if parsed:
+                        entry = {
+                            "timestamp": parsed["ts"] or upload_time,
+                            "device_id": device_id,
+                            "level": parsed["level"],
+                            "service": parsed["service"],
+                            "test_id": parsed["test_id"],
+                            "log_type": log_type or "unknown",
+                            "message": parsed["message"],
+                        }
+                    else:
+                        entry = {
+                            "timestamp": upload_time,
+                            "device_id": device_id,
+                            "level": "RAW",
+                            "service": "",
+                            "test_id": None,
+                            "log_type": log_type or "unknown",
+                            "message": line,
+                        }
+                    f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+            finally:
+                fcntl.flock(f.fileno(), fcntl.LOCK_UN)
     except Exception as e:
         logger.error(f"Failed to append to Promtail file for {device_id}: {e}")
+
+
+def _stream_lines(path: str, offset: int, limit: int) -> dict:
+    lines = []
+    total = 0
+    with open(path, "r", encoding="utf-8") as f:
+        for line in f:
+            if total >= offset and len(lines) < limit:
+                lines.append(line.rstrip("\n\r"))
+            total += 1
+    return {
+        "lines": lines,
+        "total_lines": total,
+        "offset": offset,
+        "limit": limit,
+    }
 
 
 def read_log_content(file_path: str, offset: int = 0, limit: int = 200) -> dict:
@@ -131,22 +152,11 @@ def read_log_content(file_path: str, offset: int = 0, limit: int = 200) -> dict:
             tmp.close()
             if not storage.download_file(file_path, tmp_path):
                 raise Exception("Failed to download log from S3")
-            with open(tmp_path, "r", encoding="utf-8") as f:
-                lines = f.readlines()
+            return _stream_lines(tmp_path, offset, limit)
         finally:
             try:
                 os.unlink(tmp_path)
             except Exception:
                 pass
-    else:
-        with open(file_path, "r", encoding="utf-8") as f:
-            lines = f.readlines()
 
-    total = len(lines)
-    page = lines[offset:offset + limit]
-    return {
-        "lines": [line.rstrip("\n\r") for line in page],
-        "total_lines": total,
-        "offset": offset,
-        "limit": limit,
-    }
+    return _stream_lines(file_path, offset, limit)

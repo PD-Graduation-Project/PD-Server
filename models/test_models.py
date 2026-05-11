@@ -141,7 +141,6 @@ class ESP32Log(db.Model):
         db.String(100),
         db.ForeignKey("esp32_devices.device_id", ondelete="SET NULL"),
         nullable=True,
-        index=True,
     )
     file_path = db.Column(db.String(500), nullable=False)
     original_filename = db.Column(db.String(255), nullable=True)

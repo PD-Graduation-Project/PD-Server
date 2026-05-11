@@ -29,7 +29,7 @@ def upload_log():
         return jsonify({"error": "No file selected"}), 400
 
     if not is_allowed_log_file(file.filename):
-        return jsonify({"error": "Invalid file type. Only .log and .txt files allowed"}), 400
+        return jsonify({"error": "Invalid file type. Only .log, .txt, .json, and .jsonl files allowed"}), 400
 
     log_type = request.form.get("log_type") or "unknown"
 
