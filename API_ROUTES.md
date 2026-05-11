@@ -1687,6 +1687,168 @@ Periodic keep-alive ping. Updates `is_connected = true` and `last_seen_at` times
 
 ---
 
+## ESP32 Log Routes `/api/esp32/logs`
+
+> **Client**: ESP32 Device (upload), Mobile App (list/view)
+
+Log files uploaded by the ESP32 are stored in MinIO for archive and streamed to Loki via Promtail for real-time viewing in Grafana.
+
+---
+
+### `POST /api/esp32/logs`
+
+Upload a log file from the ESP32.
+
+**Auth required**: Production key (`X-Device-API-Key: sk_live_...`)
+
+**Headers**:
+
+| Header | Value |
+|--------|-------|
+| `X-Device-API-Key` | `sk_live_...` — permanent production API key |
+
+**Request**: `multipart/form-data`
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `file` | file | Yes | Log file (`.log`, `.txt`, `.json`, `.jsonl`; max 16MB) |
+| `log_type` | string | No | Category for filtering (`boot`, `debug`, `error`, `system`, etc.) |
+
+The log file should contain one JSON object per line with the following fields:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `timestamp` | string | ISO 8601 timestamp from the ESP32 |
+| `level` | string | Log level: `DEBUG`, `INFO`, `WARN`, `ERROR` |
+| `service` | string | Test type: `tremor`, `drawing`, `voice`, `system` |
+| `test_id` | integer | Test session ID (0 for system/boot logs) |
+| `message` | string | Log message text |
+
+**Example log file**:
+```jsonl
+{"timestamp":"2026-05-09T22:10:00Z","level":"INFO","service":"tremor","test_id":42,"message":"Tremor test session started"}
+{"timestamp":"2026-05-09T22:10:10Z","level":"WARN","service":"tremor","test_id":42,"message":"Battery at 12%"}
+{"timestamp":"2026-05-09T22:10:46Z","level":"INFO","service":"tremor","test_id":42,"message":"Tremor test completed"}
+```
+
+**Example response** `201`:
+```json
+{
+  "success": true,
+  "data": {
+    "id": 5,
+    "file_size": 381,
+    "log_type": "unknown"
+  }
+}
+```
+
+**Error responses**:
+
+| Status | Body |
+|--------|------|
+| `400` | `{"error": "No file provided"}` |
+| `400` | `{"error": "Invalid file type. Only .log, .txt, .json, and .jsonl files allowed"}` |
+| `401` | `{"error": "..."}` — invalid or missing API key |
+| `500` | `{"error": "Failed to save log file"}` |
+
+---
+
+### `GET /api/esp32/logs`
+
+List log uploads for a specific device (metadata only, no content).
+
+**Auth required**: Yes (JWT)
+
+**Query parameters**:
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `device_id` | string | Yes | — | ESP32 device ID |
+| `page` | integer | No | `1` | Page number |
+| `per_page` | integer | No | `20` | Items per page (max 100) |
+
+**Example response** `200`:
+```json
+{
+  "success": true,
+  "data": {
+    "logs": [
+      {
+        "id": 5,
+        "original_filename": "tremor_log.jsonl",
+        "file_size": 381,
+        "log_type": "unknown",
+        "uploaded_at": "2026-05-09T22:10:46.123456"
+      }
+    ],
+    "page": 1,
+    "per_page": 20,
+    "total": 1,
+    "pages": 1
+  }
+}
+```
+
+**Error responses**:
+
+| Status | Body |
+|--------|------|
+| `400` | `{"error": "device_id query parameter is required"}` |
+| `404` | `{"error": "Device not found"}` |
+
+---
+
+### `GET /api/esp32/logs/<log_id>/view`
+
+Read paginated log content inline.
+
+**Auth required**: Yes (JWT)
+
+**URL parameters**:
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `log_id` | integer | ESP32Log ID |
+
+**Query parameters**:
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `offset` | integer | `0` | Line number to start from |
+| `limit` | integer | `200` | Max lines to return (max 1000) |
+
+**Example response** `200`:
+```json
+{
+  "success": true,
+  "data": {
+    "id": 5,
+    "original_filename": "tremor_log.jsonl",
+    "file_size": 381,
+    "log_type": "unknown",
+    "uploaded_at": "2026-05-09T22:10:46.123456",
+    "lines": [
+      "Tremor test session started",
+      "Battery at 12%",
+      "Tremor test completed"
+    ],
+    "total_lines": 3,
+    "offset": 0,
+    "limit": 200
+  }
+}
+```
+
+**Error responses**:
+
+| Status | Body |
+|--------|------|
+| `404` | `{"error": "Log not found"}` |
+| `500` | `{"error": "Failed to read log content"}` |
+
+---
+
 ## File Download Routes `/api/files`
 
 > **Client**: Mobile App
