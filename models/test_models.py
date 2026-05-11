@@ -131,3 +131,24 @@ class ESP32Device(db.Model):
         db.Index("idx_esp32_api_key", "api_key"),
         db.Index("idx_esp32_factory_api_key", "factory_api_key"),
     )
+
+
+class ESP32Log(db.Model):
+    __tablename__ = "esp32_logs"
+
+    id = db.Column(db.Integer, primary_key=True)
+    device_id = db.Column(
+        db.String(100),
+        db.ForeignKey("esp32_devices.device_id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    file_path = db.Column(db.String(500), nullable=False)
+    original_filename = db.Column(db.String(255), nullable=True)
+    file_size = db.Column(db.BigInteger, nullable=True)
+    log_type = db.Column(db.String(50), nullable=True)
+    uploaded_at = db.Column(db.DateTime, default=datetime.utcnow)
+    expires_at = db.Column(db.DateTime, nullable=True)
+
+    __table_args__ = (
+        db.Index("idx_esp32_log_device_time", "device_id", "uploaded_at"),
+    )

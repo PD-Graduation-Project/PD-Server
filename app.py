@@ -450,6 +450,7 @@ def create_app(config_override=None):
 
     from routes.auth_routes import auth_bp
     from routes.esp32_devices_routes import esp32_devices_bp
+    from routes.esp32_log_routes import esp32_log_bp
     from routes.esp32_routes import esp32_bp
     from routes.file_routes import file_bp
     from routes.group_routes import group_bp
@@ -466,6 +467,7 @@ def create_app(config_override=None):
     app.register_blueprint(upload_bp)
     app.register_blueprint(esp32_bp)
     app.register_blueprint(esp32_devices_bp)
+    app.register_blueprint(esp32_log_bp)
     app.register_blueprint(file_bp)
 
     @app.route("/health", methods=["GET"])
