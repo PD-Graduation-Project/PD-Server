@@ -24,8 +24,10 @@ def upload_log():
     if "file" in request.files:
         file = request.files["file"]
         filename = file.filename or "upload.log"
+        logger.info(f"ESP32 upload: multipart branch, filename={filename}")
     elif request.content_type == "application/octet-stream":
         raw = request.get_data()
+        logger.info(f"ESP32 upload: octet-stream branch, len={len(raw) if raw else 0}")
         if not raw:
             return jsonify({"error": "No file provided"}), 400
         from io import BytesIO
@@ -33,6 +35,7 @@ def upload_log():
         file = FileStorage(stream=BytesIO(raw), filename="upload.log", content_type="application/octet-stream")
         filename = "upload.log"
     else:
+        logger.info(f"ESP32 upload: no-match branch, content_type={request.content_type}")
         return jsonify({"error": "No file provided"}), 400
 
     if not is_allowed_log_file(filename):
