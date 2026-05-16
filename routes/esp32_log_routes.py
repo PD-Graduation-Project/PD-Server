@@ -26,7 +26,7 @@ def upload_log():
         filename = file.filename or "upload.log"
         logger.info(f"ESP32 upload: multipart branch, filename={filename}")
     elif request.content_type == "application/octet-stream":
-        raw = request.get_data()
+        raw = request.stream.read()
         logger.info(f"ESP32 upload: octet-stream branch, len={len(raw) if raw else 0}")
         if not raw:
             return jsonify({"error": "No file provided"}), 400
