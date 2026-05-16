@@ -21,20 +21,27 @@ def upload_log():
     device_info = g.esp32_device_info
     device_id = device_info["device_id"]
 
-    if "file" not in request.files:
+    if "file" in request.files:
+        file = request.files["file"]
+        filename = file.filename or "upload.log"
+    elif request.content_type == "application/octet-stream":
+        raw = request.get_data()
+        if not raw:
+            return jsonify({"error": "No file provided"}), 400
+        from io import BytesIO
+        from werkzeug.datastructures import FileStorage
+        file = FileStorage(stream=BytesIO(raw), filename="upload.log", content_type="application/octet-stream")
+        filename = "upload.log"
+    else:
         return jsonify({"error": "No file provided"}), 400
 
-    file = request.files["file"]
-    if not file.filename:
-        return jsonify({"error": "No file selected"}), 400
-
-    if not is_allowed_log_file(file.filename):
+    if not is_allowed_log_file(filename):
         return jsonify({"error": "Invalid file type. Only .log, .txt, .json, and .jsonl files allowed"}), 400
 
     log_type = request.form.get("log_type") or "unknown"
 
     try:
-        file_path, file_size = save_log_file(file, device_id, file.filename, log_type)
+        file_path, file_size = save_log_file(file, device_id, filename, log_type)
     except Exception as e:
         logger.error(f"Log upload failed for device {device_id}: {e}")
         return jsonify({"error": "Failed to save log file"}), 500
@@ -42,7 +49,7 @@ def upload_log():
     log_entry = ESP32Log(
         device_id=device_id,
         file_path=file_path,
-        original_filename=file.filename,
+        original_filename=filename,
         file_size=file_size,
         log_type=log_type,
         expires_at=get_expires_at(),
@@ -50,7 +57,7 @@ def upload_log():
     db.session.add(log_entry)
     db.session.commit()
 
-    logger.info(f"ESP32 log uploaded: device={device_id} file={file.filename} size={file_size} type={log_type}")
+    logger.info(f"ESP32 log uploaded: device={device_id} file={filename} size={file_size} type={log_type}")
 
     return (
         jsonify({
