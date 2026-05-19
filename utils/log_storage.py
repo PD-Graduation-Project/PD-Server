@@ -40,7 +40,9 @@ def is_allowed_log_file(filename: str) -> bool:
     return get_file_extension(filename) in ALLOWED_LOG_EXTENSIONS
 
 
-def save_log_file(file, device_id: str, filename: str, log_type: Optional[str] = None) -> tuple[str, int]:
+def save_log_file(
+    file, device_id: str, filename: str, log_type: Optional[str] = None
+) -> tuple[str, int]:
     unique_id = uuid.uuid4().hex[:12]
     safe_filename = f"{unique_id}_{secure_filename(filename)}"
     timestamp = datetime.utcnow().isoformat()
@@ -49,7 +51,9 @@ def save_log_file(file, device_id: str, filename: str, log_type: Optional[str] =
     file_size = file.tell()
     file.seek(0)
     if file_size > MAX_LOG_FILE_SIZE:
-        raise ValueError(f"File size exceeds maximum allowed ({MAX_LOG_FILE_SIZE // (1024*1024)}MB)")
+        raise ValueError(
+            f"File size exceeds maximum allowed ({MAX_LOG_FILE_SIZE // (1024 * 1024)}MB)"
+        )
 
     content = file.read()
 
@@ -86,15 +90,22 @@ def _parse_esp32_log_line(raw: str) -> Optional[dict]:
     }
 
 
-def _append_to_promtail(content: bytes, device_id: str, upload_time: str, log_type: Optional[str] = None):
+def _append_to_promtail(
+    content: bytes, device_id: str, upload_time: str, log_type: Optional[str] = None
+):
     try:
         promtail_path = _get_promtail_path(device_id)
-        decoded = content.decode("utf-8", errors="replace")
+        log_type_str = log_type or "unknown"
         with open(promtail_path, "a", encoding="utf-8") as f:
-            fcntl.flock(f.fileno(), fcntl.LOCK_EX)
+            # Each device writes to its own per-date file, so no cross-device
+            # contention. A shared lock lets concurrent reads proceed freely
+            # while still serialising any same-device concurrent writes.
+            fcntl.flock(f.fileno(), fcntl.LOCK_SH)
             try:
-                for raw_line in decoded.split("\n"):
-                    line = raw_line.strip()
+                # Iterate BytesIO line-by-line to avoid decoding/splitting the
+                # entire file into memory at once — O(1) RAM instead of O(n).
+                for raw_bytes in BytesIO(content):
+                    line = raw_bytes.decode("utf-8", errors="replace").strip()
                     if not line:
                         continue
                     parsed = _parse_esp32_log_line(line)
@@ -105,7 +116,7 @@ def _append_to_promtail(content: bytes, device_id: str, upload_time: str, log_ty
                             "level": parsed["level"],
                             "service": parsed["service"],
                             "test_id": parsed["test_id"],
-                            "log_type": log_type or "unknown",
+                            "log_type": log_type_str,
                             "message": parsed["message"],
                         }
                     else:
@@ -115,7 +126,7 @@ def _append_to_promtail(content: bytes, device_id: str, upload_time: str, log_ty
                             "level": "RAW",
                             "service": "",
                             "test_id": None,
-                            "log_type": log_type or "unknown",
+                            "log_type": log_type_str,
                             "message": line,
                         }
                     f.write(json.dumps(entry, ensure_ascii=False) + "\n")
@@ -146,6 +157,7 @@ def read_log_content(file_path: str, offset: int = 0, limit: int = 200) -> dict:
 
     if storage:
         import tempfile
+
         tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".log")
         try:
             tmp_path = tmp.name
