@@ -3,6 +3,7 @@ from flask import Blueprint, g, jsonify, request
 from middleware.authenticate import authenticate
 from models.database import db
 from models.test_models import TestInput
+from utils.cache import invalidate_test_caches
 from utils.s3_storage import get_storage, is_s3_enabled
 
 file_bp = Blueprint("files", __name__, url_prefix="/api/files")
@@ -51,8 +52,12 @@ def delete_file(input_id):
     if not success:
         return jsonify({"error": "Failed to delete file"}), 500
 
+    test_session_id = inp.test_session_id
+
     # Delete from DB
     db.session.delete(inp)
     db.session.commit()
+
+    invalidate_test_caches(g.user_id, test_session_id)
 
     return jsonify({"success": True, "message": "File deleted"}), 200

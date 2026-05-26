@@ -14,7 +14,6 @@ from loguru import logger
 from config import Config
 from models.database import db
 from models.test_models import TestGroup, TestSession
-from models.user import User
 
 
 def with_retry(max_retries=3, delay=1, backoff=2):
@@ -173,6 +172,13 @@ def run_inference(session_id: int) -> dict:
                 duration_seconds = max(0.0, time.time() - started_at)
                 r.incrbyfloat("pd:ml:duration_sum_seconds", duration_seconds)
                 r.incr("pd:ml:duration_count")
+
+                r.delete(f"cache:v1:user:{session.user_id}:test:{session_id}")
+                if session.group_id:
+                    r.delete(
+                        f"cache:v1:user:{session.user_id}:group:{session.group_id}"
+                    )
+
                 r.close()
             except Exception:
                 pass
@@ -217,5 +223,14 @@ def run_inference(session_id: int) -> dict:
                         db.session.commit()
                     except Exception:
                         db.session.rollback()
+
+            try:
+                from redis import Redis
+
+                r = Redis.from_url(Config.REDIS_URL)
+                r.delete(f"cache:v1:user:{session.user_id}:test:{session_id}")
+                r.close()
+            except Exception:
+                pass
 
             raise

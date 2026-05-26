@@ -6,6 +6,7 @@ from sqlalchemy.orm import selectinload
 from middleware.authenticate import authenticate
 from models.database import db
 from models.test_models import TestGroup
+from utils.cache import cached, invalidates
 from schemas.group_schema import GroupListQuerySchema, GroupSchema
 from utils.validation import get_query_params
 
@@ -14,6 +15,7 @@ group_bp = Blueprint("groups", __name__, url_prefix="/api/groups")
 
 @group_bp.route("", methods=["POST"])
 @authenticate
+@invalidates("groups:*")
 def create_group():
     """
     Create a new test group.
@@ -38,6 +40,7 @@ def create_group():
 
 @group_bp.route("", methods=["GET"])
 @authenticate
+@cached(ttl=30, prefix="groups")
 def list_groups():
     """
     List all test groups for the current user with optional status filter
@@ -88,6 +91,7 @@ def list_groups():
 
 @group_bp.route("/<int:group_id>", methods=["GET"])
 @authenticate
+@cached(ttl=30, prefix="group")
 def get_group(group_id):
     """
     Get a single test group by ID, including all linked test sessions

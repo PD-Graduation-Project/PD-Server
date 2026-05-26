@@ -10,6 +10,7 @@ from middleware.authenticate import authenticate
 from middleware.authenticate_esp32 import authenticate_jwt_or_esp32
 from models.database import db
 from models.test_models import TestGroup, TestInput, TestSession
+from utils.cache import invalidates
 from utils.esp32_connection_manager import connection_manager
 from utils.storage import (
     delete_file,
@@ -36,6 +37,7 @@ def get_ml_queue():
 
 @upload_bp.route("/<int:test_id>/tremor", methods=["POST"])
 @authenticate_jwt_or_esp32
+@invalidates("test:{test_id}", "tests:*")
 def upload_tremor(test_id):
     """Upload gyro data for tremor test.
 
@@ -228,6 +230,7 @@ def _upload_tremor_file(test_id, test_session):
 
 @upload_bp.route("/<int:test_id>/drawings", methods=["POST"])
 @authenticate
+@invalidates("test:{test_id}", "tests:*")
 def upload_drawings(test_id):
     """Upload spiral drawing images (atomic: both files or nothing)."""
     test_session = db.session.get(TestSession, test_id)
@@ -344,6 +347,7 @@ def upload_drawings(test_id):
 
 @upload_bp.route("/<int:test_id>/voice", methods=["POST"])
 @authenticate
+@invalidates("test:{test_id}", "tests:*")
 def upload_voice(test_id):
     """Upload voice recording."""
     test_session = db.session.get(TestSession, test_id)
@@ -407,6 +411,7 @@ def upload_voice(test_id):
 
 @upload_bp.route("/<int:test_id>/complete", methods=["POST"])
 @authenticate_jwt_or_esp32
+@invalidates("test:{test_id}", "tests:*")
 def complete_test(test_id):
     """Mark a test as completed."""
     test_session = db.session.get(TestSession, test_id)
@@ -510,6 +515,7 @@ def complete_test(test_id):
 
 @upload_bp.route("/<int:test_id>/reset", methods=["POST"])
 @authenticate_jwt_or_esp32
+@invalidates("test:{test_id}", "tests:*")
 def reset_test(test_id):
     """
     Reset a test session by deleting all uploaded files and inputs,

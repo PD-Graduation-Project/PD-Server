@@ -58,6 +58,7 @@ def app():
             "JWT_ALGORITHM": "HS256",
             "FACTORY_SECRET": "test_factory_secret",
             "RATE_LIMIT_ENABLED": False,
+            "CACHE_ENABLED": False,
         }
     )
 

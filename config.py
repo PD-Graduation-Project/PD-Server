@@ -36,6 +36,9 @@ class Config:
     # Redis settings for ESP32 event pub/sub
     REDIS_URL = os.environ.get("REDIS_URL") or "redis://localhost:6379/0"
 
+    # Redis response caching
+    CACHE_ENABLED = os.environ.get("CACHE_ENABLED", "true").lower() == "true"
+
     # MinIO / S3 settings
     MINIO_ENDPOINT = os.environ.get("MINIO_ENDPOINT", "minio:9000")
     MINIO_ROOT_USER = os.environ.get("MINIO_ROOT_USER", "minioadmin")

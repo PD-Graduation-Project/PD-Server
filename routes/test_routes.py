@@ -6,6 +6,7 @@ from sqlalchemy.orm import selectinload
 from middleware.authenticate import authenticate
 from models.database import db
 from models.test_models import TestGroup, TestSession
+from utils.cache import cached, invalidates
 from schemas.test_schema import CreateTestSchema, TestListQuerySchema, TestSessionSchema
 from utils.validation import get_json_body, get_query_params
 
@@ -14,6 +15,7 @@ test_bp = Blueprint("test", __name__, url_prefix="/api/tests")
 
 @test_bp.route("", methods=["POST"])
 @authenticate
+@invalidates("tests:*")
 def create_test():
     schema = CreateTestSchema()
     raw_body, error = get_json_body(request)
@@ -86,6 +88,7 @@ def create_test():
 
 @test_bp.route("", methods=["GET"])
 @authenticate
+@cached(ttl=30, prefix="tests")
 def list_tests():
     schema = TestListQuerySchema()
     try:
@@ -138,6 +141,7 @@ def list_tests():
 
 @test_bp.route("/<int:test_id>", methods=["GET"])
 @authenticate
+@cached(ttl=30, prefix="test")
 def get_test(test_id):
     test_session = db.session.get(TestSession, test_id)
 
