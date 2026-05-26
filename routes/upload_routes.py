@@ -10,7 +10,6 @@ from middleware.authenticate import authenticate
 from middleware.authenticate_esp32 import authenticate_jwt_or_esp32
 from models.database import db
 from models.test_models import TestGroup, TestInput, TestSession
-from models.user import User
 from utils.esp32_connection_manager import connection_manager
 from utils.storage import (
     delete_file,
@@ -44,15 +43,11 @@ def upload_tremor(test_id):
     - multipart/form-data with file upload
     - JSON body with IMU data arrays
     """
-    current_user = db.session.get(User, g.user_id)
-    if not current_user:
-        return jsonify({"error": "User not found"}), 404
-
     test_session = db.session.get(TestSession, test_id)
     if not test_session:
         return jsonify({"error": "Test not found"}), 404
 
-    if test_session.user_id != current_user.id:
+    if test_session.user_id != g.user_id:
         return jsonify({"error": "Forbidden"}), 403
 
     if test_session.test_type != "tremor":
@@ -235,15 +230,11 @@ def _upload_tremor_file(test_id, test_session):
 @authenticate
 def upload_drawings(test_id):
     """Upload spiral drawing images (atomic: both files or nothing)."""
-    current_user = db.session.get(User, g.user_id)
-    if not current_user:
-        return jsonify({"error": "User not found"}), 404
-
     test_session = db.session.get(TestSession, test_id)
     if not test_session:
         return jsonify({"error": "Test not found"}), 404
 
-    if test_session.user_id != current_user.id:
+    if test_session.user_id != g.user_id:
         return jsonify({"error": "Forbidden"}), 403
 
     if test_session.test_type != "drawing":
@@ -355,15 +346,11 @@ def upload_drawings(test_id):
 @authenticate
 def upload_voice(test_id):
     """Upload voice recording."""
-    current_user = db.session.get(User, g.user_id)
-    if not current_user:
-        return jsonify({"error": "User not found"}), 404
-
     test_session = db.session.get(TestSession, test_id)
     if not test_session:
         return jsonify({"error": "Test not found"}), 404
 
-    if test_session.user_id != current_user.id:
+    if test_session.user_id != g.user_id:
         return jsonify({"error": "Forbidden"}), 403
 
     if test_session.test_type != "voice":
@@ -422,15 +409,11 @@ def upload_voice(test_id):
 @authenticate_jwt_or_esp32
 def complete_test(test_id):
     """Mark a test as completed."""
-    current_user = db.session.get(User, g.user_id)
-    if not current_user:
-        return jsonify({"error": "User not found"}), 404
-
     test_session = db.session.get(TestSession, test_id)
     if not test_session:
         return jsonify({"error": "Test not found"}), 404
 
-    if test_session.user_id != current_user.id:
+    if test_session.user_id != g.user_id:
         return jsonify({"error": "Forbidden"}), 403
 
     if test_session.status == "completed":
@@ -536,15 +519,11 @@ def reset_test(test_id):
     Only allowed if the test's group is NOT completed.
     Auth: JWT user (owner) or paired ESP32 device.
     """
-    current_user = db.session.get(User, g.user_id)
-    if not current_user:
-        return jsonify({"error": "User not found"}), 404
-
     test_session = db.session.get(TestSession, test_id)
     if not test_session:
         return jsonify({"error": "Test not found"}), 404
 
-    if test_session.user_id != current_user.id:
+    if test_session.user_id != g.user_id:
         return jsonify({"error": "Forbidden"}), 403
 
     # Check if group is completed - reject reset if so
@@ -636,7 +615,7 @@ def reset_test(test_id):
 
     db.session.commit()
 
-    logger.info(f"Test {test_id} reset by user {current_user.id}")
+    logger.info(f"Test {test_id} reset by user {g.user_id}")
 
     return (
         jsonify(
@@ -658,15 +637,11 @@ def start_test(test_id):
 
     Auth: JWT user (owner) or paired ESP32 device.
     """
-    current_user = db.session.get(User, g.user_id)
-    if not current_user:
-        return jsonify({"error": "User not found"}), 404
-
     test_session = db.session.get(TestSession, test_id)
     if not test_session:
         return jsonify({"error": "Test not found"}), 404
 
-    if test_session.user_id != current_user.id:
+    if test_session.user_id != g.user_id:
         return jsonify({"error": "Forbidden"}), 403
 
     if test_session.test_type != "tremor":
@@ -685,7 +660,7 @@ def start_test(test_id):
 
     try:
         success = connection_manager.send_event(
-            current_user.id,
+            g.user_id,
             "test_started",
             {
                 "test_id": test_session.id,
@@ -695,7 +670,7 @@ def start_test(test_id):
         )
         if success:
             logger.info(
-                f"test_started event sent for test {test_id} to user {current_user.id}"
+                f"test_started event sent for test {test_id} to user {g.user_id}"
             )
             return (
                 jsonify(
