@@ -1,0 +1,40 @@
+services:
+  # Override dev mode flask run with gunicorn (matches production concurrency)
+  app:
+    environment:
+      RATE_LIMIT_ENABLED: "false"
+    command:
+      - gunicorn
+      - "--workers=${BENCH_WORKERS:-8}"
+      - "--worker-class=gevent"
+      - "--bind=0.0.0.0:5000"
+      - "--preload"
+      - "app:create_app()"
+
+  worker:
+    deploy:
+      resources:
+        limits:
+          cpus: "${BENCH_CPUS:-2}"
+          memory: "${BENCH_MEM:-12G}"
+
+  postgres:
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: "1G"
+
+  redis:
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: "512M"
+
+  minio:
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: "512M"

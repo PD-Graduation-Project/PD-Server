@@ -17,3 +17,4 @@ docker/.env.docker.bak
 docker/.env.bak
 
 docker/geoip-db/
+scripts/bench_results/
