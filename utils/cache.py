@@ -18,6 +18,11 @@ def _redis() -> Redis:
 
 
 def _cache_key(prefix: str, **kwargs) -> str:
+    """Builds a Redis key like cache:v1:user:{user_id}:{prefix}.
+    Appends URL path params (kwargs) joined by _ after the prefix.
+    If there's a query string (e.g. ?status=pending), appends an 8-char MD5 hash of it.
+    If neither kwargs nor qs exist, appends trailing : so glob patterns like tests:* can match the key."""
+
     user_id = getattr(g, "user_id", "anon")
     key = f"cache:v1:user:{user_id}:{prefix}"
 
@@ -29,11 +34,15 @@ def _cache_key(prefix: str, **kwargs) -> str:
     if qs:
         param_hash = hashlib.md5(qs.encode()).hexdigest()[:8]
         key = f"{key}:{param_hash}"
+    elif not kwargs:
+        # append colon if there's no kwargs
+        key = f"{key}:"
 
     return key
 
 
 def _unpack(result):
+    """Normalizes a route's return value whether it's (response, 200) or just response into (body_string, status_code). Handles Flask Response objects, dicts, and plain strings"""
     if isinstance(result, tuple):
         resp, status = result[0], result[1]
     else:
@@ -58,6 +67,7 @@ def cached(ttl: int = 30, prefix: str | None = None):
         prefix: Cache key prefix. If None, uses request.endpoint.
                 E.g. prefix="test" produces key cache:v1:user:{uid}:test:{id}
     """
+
     def decorator(fn):
         @wraps(fn)
         def wrapper(*args, **kwargs):
@@ -74,16 +84,26 @@ def cached(ttl: int = 30, prefix: str | None = None):
             cached_data = r.get(key)
             if cached_data is not None:
                 body_str, status_str = cached_data.rsplit("|||", 1)
-                return Response(body_str, status=int(status_str), content_type="application/json")
+                resp = Response(
+                    body_str, status=int(status_str), content_type="application/json"
+                )
+                resp.headers["X-Cache"] = "HIT"
+                return resp
 
             result = fn(*args, **kwargs)
             body_str, status = _unpack(result)
 
             if status < 400:
                 r.setex(key, ttl, f"{body_str}|||{status}")
+                if isinstance(result, tuple):
+                    result[0].headers["X-Cache"] = "MISS"
+                else:
+                    result.headers["X-Cache"] = "MISS"
 
             return result
+
         return wrapper
+
     return decorator
 
 
@@ -95,27 +115,36 @@ def invalidates(*patterns: str):
 
     Patterns ending with '*' use scan_iter for glob matching.
     """
+
     def decorator(fn):
         @wraps(fn)
         def wrapper(*args, **kwargs):
             if not current_app.config.get("CACHE_ENABLED", True):
                 return fn(*args, **kwargs)
 
-            user_id = getattr(g, "user_id", "anon")
-            r = _redis()
+            # run route first
+            result = fn(*args, **kwargs)
 
-            for pattern in patterns:
-                resolved = pattern.format(**kwargs)
-                full_pattern = f"cache:v1:user:{user_id}:{resolved}"
+            # only invalidate successfull runs
+            _, status = _unpack(result)
+            if status < 400:
+                user_id = getattr(g, "user_id", "anon")
+                r = _redis()
 
-                if full_pattern.endswith("*"):
-                    for key in r.scan_iter(full_pattern):
-                        r.delete(key)
-                else:
-                    r.delete(full_pattern)
+                for pattern in patterns:
+                    resolved = pattern.format(**kwargs)
+                    full_pattern = f"cache:v1:user:{user_id}:{resolved}"
 
-            return fn(*args, **kwargs)
+                    if full_pattern.endswith("*"):
+                        for key in r.scan_iter(full_pattern):
+                            r.delete(key)
+                    else:
+                        r.delete(full_pattern)
+
+            return result
+
         return wrapper
+
     return decorator
 
 

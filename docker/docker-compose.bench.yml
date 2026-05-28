@@ -3,6 +3,7 @@ services:
   app:
     environment:
       RATE_LIMIT_ENABLED: "false"
+      CACHE_ENABLED: "${CACHE_ENABLED:-true}"
     command:
       - gunicorn
       - "--workers=${BENCH_WORKERS:-8}"

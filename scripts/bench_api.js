@@ -87,7 +87,7 @@ export default function () {
     });
     check(res, { 'group created': (r) => r.status === 201 });
     if (res.status === 201) {
-      groupId = res.json('id');
+      groupId = res.json('data.id');
     }
   });
 
@@ -114,7 +114,7 @@ export default function () {
       check(res, { [`${testType} test created`]: (r) => r.status === 201 });
       if (res.status !== 201) continue;
 
-      const testId = res.json('id');
+      const testId = res.json('data.id');
       testIds.push(testId);
 
       // Upload data (different payload per type)
@@ -188,14 +188,36 @@ export default function () {
     }
   });
 
-  // ── 5. Check results ─────────────────────────────────────────
-  group('Results', function () {
-    for (const testId of testIds) {
-      const res = http.get(`${BASE_URL}/api/tests/${testId}`, {
+  // ── 5. Hot reads — exercise cache hits ────────────────────────
+  // Each read loop: 1st = miss (populates cache), rest = hits (30s TTL)
+  group('Hot Reads', function () {
+    var HOT_READS = 5;
+
+    for (var r = 0; r < HOT_READS; r++) {
+      var tag = r === 0 ? 'get_result_miss' : 'get_result_hit';
+      for (const testId of testIds) {
+        http.get(`${BASE_URL}/api/tests/${testId}`, {
+          headers: authHeaders,
+          tags: { endpoint: tag },
+        });
+      }
+    }
+
+    // List endpoints — first miss, subsequent hits
+    for (var r = 0; r < HOT_READS; r++) {
+      var listTag = r === 0 ? 'list_tests_miss' : 'list_tests_hit';
+      http.get(`${BASE_URL}/api/tests`, {
         headers: authHeaders,
-        tags: { endpoint: 'get_result' },
+        tags: { endpoint: listTag },
       });
-      check(res, { [`result for ${testId}`]: (r) => r.status === 200 });
+      http.get(`${BASE_URL}/api/tests?status=completed`, {
+        headers: authHeaders,
+        tags: { endpoint: 'list_tests_filtered_' + (r === 0 ? 'miss' : 'hit') },
+      });
+      http.get(`${BASE_URL}/api/groups`, {
+        headers: authHeaders,
+        tags: { endpoint: 'list_groups_' + (r === 0 ? 'miss' : 'hit') },
+      });
     }
   });
 
