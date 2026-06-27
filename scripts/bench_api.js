@@ -105,7 +105,7 @@ export default function () {
       const createPayload = JSON.stringify({
         group_id: groupId,
         test_type: testType,
-        config: { 0: true, 1: true },
+        config: { 0: true },
       });
       let res = http.post(`${BASE_URL}/api/tests`, createPayload, {
         headers: authHeaders,
@@ -118,31 +118,43 @@ export default function () {
       testIds.push(testId);
 
       // Upload data (different payload per type)
-      let uploadUrl = `${BASE_URL}/api/tests/${testId}/${testType}`;
+      let uploadPath = testType === 'drawing' ? 'drawings' : testType;
+      let uploadUrl = `${BASE_URL}/api/tests/${testId}/${uploadPath}`;
       let uploadRes;
 
       if (testType === 'tremor') {
-        // Generate mock IMU data
-        const imuData = {
-          ax: Array.from({ length: 100 }, () => Math.random() * 2 - 1),
-          ay: Array.from({ length: 100 }, () => Math.random() * 2 - 1),
-          az: Array.from({ length: 100 }, () => Math.random() * 2 + 9),
-          gx: Array.from({ length: 100 }, () => Math.random() * 0.1 - 0.05),
-          gy: Array.from({ length: 100 }, () => Math.random() * 0.1 - 0.05),
-          gz: Array.from({ length: 100 }, () => Math.random() * 0.1 - 0.05),
-        };
-        uploadRes = http.post(uploadUrl, JSON.stringify(imuData), {
-          headers: authHeaders,
-          tags: { endpoint: 'upload_tremor' },
-        });
+        // Upload IMU data for each enabled subtest x both hands
+        const config = { 0: true };
+        const steps = Object.keys(config).filter(k => config[k]);
+        for (const step of steps) {
+          for (const hand of ['l', 'r']) {
+            const imuPayload = JSON.stringify({
+              subtest: parseInt(step),
+              hand: hand,
+              imu_data: {
+                ax: Array.from({ length: 100 }, () => Math.random() * 2 - 1),
+                ay: Array.from({ length: 100 }, () => Math.random() * 2 - 1),
+                az: Array.from({ length: 100 }, () => Math.random() * 2 + 9),
+                gx: Array.from({ length: 100 }, () => Math.random() * 0.1 - 0.05),
+                gy: Array.from({ length: 100 }, () => Math.random() * 0.1 - 0.05),
+                gz: Array.from({ length: 100 }, () => Math.random() * 0.1 - 0.05),
+              },
+            });
+            uploadRes = http.post(uploadUrl, imuPayload, {
+              headers: authHeaders,
+              tags: { endpoint: 'upload_tremor' },
+            });
+            check(uploadRes, { [`tremor step=${step} hand=${hand}`]: (r) => r.status === 200 || r.status === 201 });
+          }
+        }
       } else if (testType === 'drawing') {
         const boundary = '----FormBoundary' + randomString(16);
         let body = `--${boundary}\r\n`;
-        body += 'Content-Disposition: form-data; name="left_image"; filename="left.png"\r\n';
+        body += 'Content-Disposition: form-data; name="spiral_left"; filename="left.png"\r\n';
         body += 'Content-Type: image/png\r\n\r\n';
         body += 'FAKE_IMAGE_DATA_LEFT\r\n';
         body += `--${boundary}\r\n`;
-        body += 'Content-Disposition: form-data; name="right_image"; filename="right.png"\r\n';
+        body += 'Content-Disposition: form-data; name="spiral_right"; filename="right.png"\r\n';
         body += 'Content-Type: image/png\r\n\r\n';
         body += 'FAKE_IMAGE_DATA_RIGHT\r\n';
         body += `--${boundary}--\r\n`;
@@ -154,10 +166,11 @@ export default function () {
           },
           tags: { endpoint: 'upload_drawing' },
         });
+        check(uploadRes, { [`drawing upload ok`]: (r) => r.status === 200 || r.status === 201 });
       } else if (testType === 'voice') {
         const boundary = '----FormBoundary' + randomString(16);
         let body = `--${boundary}\r\n`;
-        body += 'Content-Disposition: form-data; name="file"; filename="voice.wav"\r\n';
+        body += 'Content-Disposition: form-data; name="audio"; filename="voice.wav"\r\n';
         body += 'Content-Type: audio/wav\r\n\r\n';
         body += 'FAKE_AUDIO_DATA\r\n';
         body += `--${boundary}--\r\n`;
@@ -169,9 +182,8 @@ export default function () {
           },
           tags: { endpoint: 'upload_voice' },
         });
+        check(uploadRes, { [`voice upload ok`]: (r) => r.status === 200 || r.status === 201 });
       }
-
-      check(uploadRes, { [`${testType} upload ok`]: (r) => r.status === 200 || r.status === 201 });
       sleep(0.5);
     }
   });
@@ -183,7 +195,7 @@ export default function () {
         headers: authHeaders,
         tags: { endpoint: 'complete_test' },
       });
-      check(res, { [`test ${testId} completed`]: (r) => r.status === 200 });
+      check(res, { [`test ${testId} completed`]: (r) => r.status === 200 || r.status === 202 });
       sleep(0.5);
     }
   });

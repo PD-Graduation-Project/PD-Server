@@ -362,11 +362,12 @@ def create_app(config_override=None):
         try:
             g.start_time = time.time()
             g.request_id = str(uuid.uuid4())[:8]
-            g.client_ip = _get_client_ip()
-            g.skip_access_log = not should_log_request_path(request.path)
 
-            if g.skip_access_log:
+            if not should_log_request_path(request.path):
+                g.skip_access_log = True
                 return
+            g.skip_access_log = False
+            g.client_ip = _get_client_ip()
 
             colored = use_color_logs()
             method_token = (

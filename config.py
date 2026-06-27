@@ -1,6 +1,7 @@
 import os
 
 from dotenv import load_dotenv
+from redis import ConnectionPool
 
 load_dotenv()
 
@@ -49,8 +50,8 @@ class Config:
     # Storage backend: "local" or "s3"
     STORAGE_BACKEND = os.environ.get("STORAGE_BACKEND", "local")
 
-    # Gunicorn workers (default 2 for small VMs)
-    GUNICORN_WORKERS = int(os.environ.get("GUNICORN_WORKERS", "2"))
+    # Gunicorn workers (default 4 for 2-CPU VM with gevent workers)
+    GUNICORN_WORKERS = int(os.environ.get("GUNICORN_WORKERS", "4"))
 
     # CORS allowed origins (comma-separated list, empty = deny all)
     CORS_ORIGINS = os.environ.get("CORS_ORIGINS", "")
@@ -70,6 +71,18 @@ class Config:
         for p in os.environ.get("RATE_LIMIT_EXEMPT_PATHS", "").split(",")
         if p.strip()
     }
+
+    _redis_pool: ConnectionPool | None = None
+
+    @classmethod
+    def redis_pool(cls) -> ConnectionPool:
+        if cls._redis_pool is None:
+            cls._redis_pool = ConnectionPool.from_url(
+                cls.REDIS_URL,
+                decode_responses=True,
+                max_connections=50,
+            )
+        return cls._redis_pool
 
     @staticmethod
     def init_app(app):

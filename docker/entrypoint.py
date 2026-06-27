@@ -77,7 +77,7 @@ def main():
             sys.exit(1)
 
     print("Starting application...")
-    workers = os.environ.get("GUNICORN_WORKERS", "2")
+    workers = os.environ.get("GUNICORN_WORKERS", "4")
     cmd = (
         sys.argv[1:]
         if len(sys.argv) > 1

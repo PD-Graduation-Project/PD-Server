@@ -2,19 +2,13 @@ import hashlib
 from functools import wraps
 
 from flask import Response, current_app, g, request
-from redis import ConnectionPool, Redis
+from redis import Redis
 
 from config import Config
 
-_pool = ConnectionPool.from_url(
-    Config.REDIS_URL,
-    decode_responses=True,
-    max_connections=10,
-)
-
 
 def _redis() -> Redis:
-    return Redis(connection_pool=_pool)
+    return Redis(connection_pool=Config.redis_pool())
 
 
 def _cache_key(prefix: str, **kwargs) -> str:

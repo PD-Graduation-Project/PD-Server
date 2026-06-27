@@ -69,11 +69,13 @@ def _upload_tremor_json(test_id, test_session):
     if not data:
         return jsonify({"error": "Invalid JSON body"}), 400
 
-    subtest = data.get("subtest_id") or data.get("subtest")
+    subtest = data.get("subtest_id")
+    if subtest is None:
+        subtest = data.get("subtest")
     hand_raw = data.get("hand")
     imu_data = data.get("imu_data")
 
-    if not subtest:
+    if subtest is None:
         return jsonify({"error": "subtest_id is required"}), 400
 
     if not hand_raw:
@@ -416,15 +418,18 @@ def complete_test(test_id):
     """Mark a test as completed."""
     test_session = db.session.get(TestSession, test_id)
     if not test_session:
+        logger.warning(f"complete_test not found: test_id={test_id}")
         return jsonify({"error": "Test not found"}), 404
 
     if test_session.user_id != g.user_id:
         return jsonify({"error": "Forbidden"}), 403
 
     if test_session.status == "completed":
+        logger.warning(f"complete_test already completed: test_id={test_id}")
         return jsonify({"error": "Test is already completed"}), 400
 
     if test_session.status == "pending":
+        logger.warning(f"complete_test no uploads: test_id={test_id}, type={test_session.test_type}")
         return jsonify({"error": "Test has no uploads yet"}), 400
 
     uploaded_inputs = TestInput.query.filter_by(test_session_id=test_id).all()
