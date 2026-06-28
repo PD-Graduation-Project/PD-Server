@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from flask import Blueprint, g, json, jsonify, request
+from flask import Blueprint, g, jsonify, request
 from loguru import logger
 from redis import Redis
 from rq import Queue

@@ -25,8 +25,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 try:
     from config import Config
     FACTORY_SECRET = Config.FACTORY_SECRET
-except Exception:
-    FACTORY_SECRET = "6e8d0181d6fdfd528602fcc9f5e7bfd9"
+except Exception as e:
+    raise RuntimeError(
+        "Failed to load Config/FACTORY_SECRET; run from repo root or set FACTORY_SECRET env var"
+    ) from e
 
 
 @dataclass

@@ -1,7 +1,6 @@
 import json
 import queue
 import threading
-from datetime import datetime
 
 from loguru import logger
 from redis import Redis
