@@ -46,7 +46,7 @@ def _unpack(result):
         body = resp.get_data()
         body_str = body.decode("utf-8") if isinstance(body, bytes) else str(body)
     elif isinstance(resp, (dict, list)):
-        body_str = resp  # type: ignore
+        body_str = current_app.json.dumps(resp)
     else:
         body_str = str(resp)
 
@@ -89,10 +89,9 @@ def cached(ttl: int = 30, prefix: str | None = None):
 
             if status < 400:
                 r.setex(key, ttl, f"{body_str}|||{status}")
-                if isinstance(result, tuple):
-                    result[0].headers["X-Cache"] = "MISS"
-                else:
-                    result.headers["X-Cache"] = "MISS"
+                target = result[0] if isinstance(result, tuple) else result
+                if hasattr(target, "headers"):
+                    target.headers["X-Cache"] = "MISS"
 
             return result
 

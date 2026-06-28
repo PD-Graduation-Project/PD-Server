@@ -280,12 +280,14 @@ def _collect_runtime_metrics() -> None:
 
 
 def _get_client_ip() -> str:
-    forwarded_for = request.headers.get("X-Forwarded-For", "").strip()
-    if forwarded_for:
-        return forwarded_for.split(",", 1)[0].strip()
+    # X-Real-IP is set by nginx and cannot be spoofed by the client
     real_ip = request.headers.get("X-Real-IP", "").strip()
     if real_ip:
         return real_ip
+    # nginx $proxy_add_x_forwarded_for appends the real client IP last
+    forwarded_for = request.headers.get("X-Forwarded-For", "").strip()
+    if forwarded_for:
+        return forwarded_for.rsplit(",", 1)[-1].strip()
     return request.remote_addr or "unknown"
 
 
