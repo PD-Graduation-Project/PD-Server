@@ -179,9 +179,8 @@ class ESP32ConnectionManager:
         """Get list of all connected device user IDs."""
         try:
             r = self._redis()
-            keys = r.keys(f"{self.CONNECTION_KEY_PREFIX}*")
             result = []
-            for key in keys:
+            for key in r.scan_iter(f"{self.CONNECTION_KEY_PREFIX}*"):
                 data = r.hgetall(key)
                 if data.get("connected") == "1":
                     try:

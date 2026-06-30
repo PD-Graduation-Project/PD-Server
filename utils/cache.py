@@ -125,7 +125,10 @@ def invalidates(*patterns: str):
                 r = _redis()
 
                 for pattern in patterns:
-                    resolved = pattern.format(**kwargs)
+                    try:
+                        resolved = pattern.format(**kwargs)
+                    except KeyError:
+                        continue
                     full_pattern = f"cache:v1:user:{user_id}:{resolved}"
 
                     if full_pattern.endswith("*"):

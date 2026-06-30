@@ -102,10 +102,8 @@ def _append_to_promtail(
             # from concurrent uploads for the same device.
             fcntl.flock(f.fileno(), fcntl.LOCK_EX)
             try:
-                # Iterate BytesIO line-by-line to avoid decoding/splitting the
-                # entire file into memory at once — O(1) RAM instead of O(n).
-                for raw_bytes in BytesIO(content):
-                    line = raw_bytes.decode("utf-8", errors="replace").strip()
+                for line_bytes in content.splitlines():
+                    line = line_bytes.decode("utf-8", errors="replace").strip()
                     if not line:
                         continue
                     parsed = _parse_esp32_log_line(line)
