@@ -14,6 +14,9 @@ pytest-xdist==3.5.0
 # Test Reporting
 pytest-html==4.1.1
 
+# Fake Redis for testing cache layer
+fakeredis[lua]==2.26.0
+
 # Code Quality
 black==24.1.1        # Code formatting
 flake8==7.0.0        # Linting

@@ -6,7 +6,7 @@ from sqlalchemy.orm import selectinload
 from middleware.authenticate import authenticate
 from models.database import db
 from models.test_models import TestGroup, TestSession
-from models.user import User
+from utils.cache import cached, invalidates
 from schemas.test_schema import CreateTestSchema, TestListQuerySchema, TestSessionSchema
 from utils.validation import get_json_body, get_query_params
 
@@ -15,6 +15,7 @@ test_bp = Blueprint("test", __name__, url_prefix="/api/tests")
 
 @test_bp.route("", methods=["POST"])
 @authenticate
+@invalidates("tests:*")
 def create_test():
     schema = CreateTestSchema()
     raw_body, error = get_json_body(request)
@@ -26,10 +27,6 @@ def create_test():
         data = cast(dict[str, Any], schema.load(raw_body))
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 400
-
-    current_user = db.session.get(User, g.user_id)
-    if not current_user:
-        return jsonify({"error": "User not found"}), 404
 
     # Validate group ownership
     group = db.session.get(TestGroup, data["group_id"])
@@ -62,7 +59,7 @@ def create_test():
         device_source = "esp32" if test_type == "tremor" else "mobile"
 
     test_session = TestSession(
-        user_id=current_user.id,
+        user_id=g.user_id,
         group_id=group.id,
         test_type=test_type,
         status="pending",
@@ -91,6 +88,7 @@ def create_test():
 
 @test_bp.route("", methods=["GET"])
 @authenticate
+@cached(ttl=30, prefix="tests")
 def list_tests():
     schema = TestListQuerySchema()
     try:
@@ -98,11 +96,7 @@ def list_tests():
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 400
 
-    current_user = db.session.get(User, g.user_id)
-    if not current_user:
-        return jsonify({"error": "User not found"}), 404
-
-    query = TestSession.query.filter_by(user_id=current_user.id).options(
+    query = TestSession.query.filter_by(user_id=g.user_id).options(
         selectinload(TestSession.inputs)  # type: ignore[arg-type]
     )
 
@@ -147,17 +141,14 @@ def list_tests():
 
 @test_bp.route("/<int:test_id>", methods=["GET"])
 @authenticate
+@cached(ttl=30, prefix="test")
 def get_test(test_id):
-    current_user = db.session.get(User, g.user_id)
-    if not current_user:
-        return jsonify({"error": "User not found"}), 404
-
     test_session = db.session.get(TestSession, test_id)
 
     if not test_session:
         return jsonify({"error": "Test not found"}), 404
 
-    if test_session.user_id != current_user.id:
+    if test_session.user_id != g.user_id:
         return jsonify({"error": "Forbidden"}), 403
 
     return (

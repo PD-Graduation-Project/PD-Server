@@ -54,6 +54,24 @@ scrape_configs:
           log_type: error
           __path__: /var/log/nginx/pd_error.log
 
+  - job_name: esp32-device-logs
+    static_configs:
+      - targets: [localhost]
+        labels:
+          job: pd-server
+          service: esp32-device
+          __path__: /app/logs/esp32/**/*.log
+    pipeline_stages:
+      - json:
+          expressions:
+            device_id: device_id
+            level: level
+            log_type: log_type
+      - labels:
+          device_id:
+          level:
+          log_type:
+
   - job_name: fail2ban
     static_configs:
       - targets: [localhost]
@@ -64,7 +82,7 @@ scrape_configs:
           __path__: /var/log/fail2ban.log
     pipeline_stages:
       - regex:
-          expression: '^\S+\s+\S+\s+\S+\s+\[(?P<pid>\d+)\]:\s+(?P<level>\S+)\s+\[(?P<jail>[^\]]+)\]\s+(?P<action>Ban|Unban)\s+(?P<ip>\S+)'
+          expression: '^\S+\s+\S+\s+\S+\s+\[(?P<pid>\d+)\]:\s+(?P<level>\S+)\s+\[(?P<jail>[^\]]+)\]\s+(?P<action>Found|Ban|Unban)\s+(?P<ip>\S+)'
       - labels:
           level:
           jail:

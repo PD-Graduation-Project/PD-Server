@@ -6,6 +6,8 @@ from typing import Any, cast
 from flask import Blueprint, g, jsonify, request
 from werkzeug.security import check_password_hash, generate_password_hash
 
+from models.user import _bcrypt_pool
+
 from middleware.authenticate import authenticate
 from models.database import db
 from models.user import RefreshToken, User
@@ -43,7 +45,7 @@ def _generate_auth_response(user, access_token, refresh_token, status_code=200):
 
 def generate_refresh_token(user_id, device_info=None, ip_address=None):
     token = secrets.token_urlsafe(64)
-    token_hash = generate_password_hash(token)
+    token_hash = _bcrypt_pool.submit(generate_password_hash, token).result()
 
     refresh_token = RefreshToken(
         user_id=user_id,
@@ -78,7 +80,7 @@ def verify_refresh_token(token, user_id=None):
         valid_tokens = query.all()
 
         for db_token in valid_tokens:
-            if check_password_hash(db_token.token_hash, token):
+            if _bcrypt_pool.submit(check_password_hash, db_token.token_hash, token).result():
                 return db_token  # Return the whole token object
         return None
     except Exception as e:

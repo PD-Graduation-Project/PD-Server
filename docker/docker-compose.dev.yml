@@ -1,0 +1,132 @@
+services:
+  app:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.app
+    volumes:
+      - ../ml:/app/ml
+      - ../app:/app/app
+      - ../routes:/app/routes
+      - ../utils:/app/utils
+      - ../models:/app/models
+      - ../migrations:/app/migrations
+      - ../app.py:/app/app.py
+      - ../config.py:/app/config.py
+      - ../requirements.txt:/app/requirements.txt:ro
+      - uploads:/app/uploads
+      - app_logs:/app/logs
+      - pip_cache:/home/appuser/.cache/pip
+    environment:
+      - FLASK_DEBUG=1
+      - FLASK_APP=app:create_app
+      - PYTHONPATH=/app
+    restart: "no"
+    ports:
+      - "5000:5000"
+    labels:
+      - com.centurylinklabs.watchtower.enable=false
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command:
+      sh -c "pip install --user watchfiles && flask db upgrade && flask run --host=0.0.0.0 --port=5000 --reload"
+
+  worker:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.worker
+      target: dev
+    volumes:
+      - ../ml:/app/ml
+      - ../app:/app/app
+      - ../requirements.txt:/app/requirements.txt:ro
+      - uploads:/app/uploads
+      - weights:/app/ml/_FINAL_SCRIPTS/weights
+      - torch_cache:/home/workeruser/.cache/torch/hub/checkpoints
+      - pip_cache:/home/workeruser/.cache/pip
+      - ../docker/praat_parselmouth-0.4.7-cp311-cp311-linux_aarch64.whl:/home/workeruser/praat_parselmouth-0.4.7-cp311-cp311-linux_aarch64.whl:ro
+    environment:
+      - FLASK_DEBUG=1
+      - PYTHONPATH=/app
+      - GDRIVE_WEIGHTS_ID=1Svo25SRx7RZ7MW8m1abZerdv7zgypyHT
+    restart: "no"
+    labels:
+      - com.centurylinklabs.watchtower.enable=false
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command:
+      sh -c "pip install --no-cache-dir /home/workeruser/praat_parselmouth-0.4.7-cp311-cp311-linux_aarch64.whl rq || pip install praat-parselmouth==0.4.7 rq && watchfiles 'rq worker ml' /app/app /app/ml"
+
+  nginx:
+    build:
+      context: ./nginx
+      dockerfile: Dockerfile
+    ports:
+      - "80:80"
+    restart: "no"
+    labels:
+      - com.centurylinklabs.watchtower.enable=false
+    depends_on:
+      - app
+
+  postgres:
+    ports:
+      - "5432:5432"
+    restart: "no"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pduser -d pdserver"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    ports:
+      - "6379:6379"
+    restart: "no"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  minio:
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    restart: "no"
+
+  devshell:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.worker
+      target: dev
+    profiles:
+      - shell
+    volumes:
+      - ../ml:/app/ml
+      - ../app:/app/app
+      - pip_cache:/home/workeruser/.cache/pip
+    working_dir: /app
+    environment:
+      - PYTHONPATH=/app
+    tty: true
+    stdin_open: true
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  pip_cache:

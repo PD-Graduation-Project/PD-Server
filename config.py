@@ -1,6 +1,7 @@
 import os
 
 from dotenv import load_dotenv
+from redis import ConnectionPool
 
 load_dotenv()
 
@@ -36,6 +37,9 @@ class Config:
     # Redis settings for ESP32 event pub/sub
     REDIS_URL = os.environ.get("REDIS_URL") or "redis://localhost:6379/0"
 
+    # Redis response caching
+    CACHE_ENABLED = os.environ.get("CACHE_ENABLED", "true").lower() == "true"
+
     # MinIO / S3 settings
     MINIO_ENDPOINT = os.environ.get("MINIO_ENDPOINT", "minio:9000")
     MINIO_ROOT_USER = os.environ.get("MINIO_ROOT_USER", "minioadmin")
@@ -46,8 +50,8 @@ class Config:
     # Storage backend: "local" or "s3"
     STORAGE_BACKEND = os.environ.get("STORAGE_BACKEND", "local")
 
-    # Gunicorn workers (default 2 for small VMs)
-    GUNICORN_WORKERS = int(os.environ.get("GUNICORN_WORKERS", "2"))
+    # Gunicorn workers (default 4 for 2-CPU VM with gevent workers)
+    GUNICORN_WORKERS = int(os.environ.get("GUNICORN_WORKERS", "4"))
 
     # CORS allowed origins (comma-separated list, empty = deny all)
     CORS_ORIGINS = os.environ.get("CORS_ORIGINS", "")
@@ -57,6 +61,28 @@ class Config:
     LOG_FORMAT = os.environ.get("LOG_FORMAT", "pretty")  # pretty or json
     LOG_SILENT_PATHS = os.environ.get("LOG_SILENT_PATHS", "/metrics,/health,/ready")
     LOG_FILE_RETENTION_DAYS = int(os.environ.get("LOG_FILE_RETENTION_DAYS", "7"))
+
+    # Global rate limiting (applies before route matching, including 404s)
+    RATE_LIMIT_ENABLED = os.environ.get("RATE_LIMIT_ENABLED", "true").lower() == "true"
+    RATE_LIMIT_REQUESTS = int(os.environ.get("RATE_LIMIT_REQUESTS", "120"))
+    RATE_LIMIT_WINDOW_SECONDS = int(os.environ.get("RATE_LIMIT_WINDOW_SECONDS", "60"))
+    RATE_LIMIT_EXEMPT_PATHS = {
+        p.strip()
+        for p in os.environ.get("RATE_LIMIT_EXEMPT_PATHS", "").split(",")
+        if p.strip()
+    }
+
+    _redis_pool: ConnectionPool | None = None
+
+    @classmethod
+    def redis_pool(cls) -> ConnectionPool:
+        if cls._redis_pool is None:
+            cls._redis_pool = ConnectionPool.from_url(
+                cls.REDIS_URL,
+                decode_responses=True,
+                max_connections=50,
+            )
+        return cls._redis_pool
 
     @staticmethod
     def init_app(app):

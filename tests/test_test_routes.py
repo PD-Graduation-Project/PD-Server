@@ -232,6 +232,28 @@ class TestListTests:
         assert response.status_code == 401
 
 
+class TestCreateTestOwnership:
+    """Validate user_id assignment uses g.user_id from JWT, not redundant DB lookup."""
+
+    def test_create_test_sets_correct_user_id(self, client, auth_headers, test_group, test_user):
+        response = client.post(
+            "/api/tests",
+            json={"test_type": "tremor", "group_id": test_group},
+            headers=auth_headers,
+        )
+        assert response.status_code == 201
+        data = response.get_json()
+        assert data["data"]["user_id"] == test_user.id
+
+    def test_list_tests_filters_by_authenticated_user(self, client, auth_headers, test_user, test_session_fixture):
+        response = client.get("/api/tests", headers=auth_headers)
+        assert response.status_code == 200
+        data = response.get_json()
+        assert data["data"]["total"] > 0
+        for t in data["data"]["tests"]:
+            assert t["user_id"] == test_user.id
+
+
 class TestGetTest:
     def test_get_test_success(self, client, auth_headers, test_session_fixture):
         response = client.get(

@@ -10,7 +10,7 @@ from middleware.authenticate import authenticate
 from middleware.authenticate_esp32 import authenticate_jwt_or_esp32
 from models.database import db
 from models.test_models import TestGroup, TestInput, TestSession
-from models.user import User
+from utils.cache import invalidates
 from utils.esp32_connection_manager import connection_manager
 from utils.storage import (
     delete_file,
@@ -37,6 +37,7 @@ def get_ml_queue():
 
 @upload_bp.route("/<int:test_id>/tremor", methods=["POST"])
 @authenticate_jwt_or_esp32
+@invalidates("test:{test_id}", "tests:*")
 def upload_tremor(test_id):
     """Upload gyro data for tremor test.
 
@@ -44,15 +45,11 @@ def upload_tremor(test_id):
     - multipart/form-data with file upload
     - JSON body with IMU data arrays
     """
-    current_user = db.session.get(User, g.user_id)
-    if not current_user:
-        return jsonify({"error": "User not found"}), 404
-
     test_session = db.session.get(TestSession, test_id)
     if not test_session:
         return jsonify({"error": "Test not found"}), 404
 
-    if test_session.user_id != current_user.id:
+    if test_session.user_id != g.user_id:
         return jsonify({"error": "Forbidden"}), 403
 
     if test_session.test_type != "tremor":
@@ -72,11 +69,13 @@ def _upload_tremor_json(test_id, test_session):
     if not data:
         return jsonify({"error": "Invalid JSON body"}), 400
 
-    subtest = data.get("subtest_id") or data.get("subtest")
+    subtest = data.get("subtest_id")
+    if subtest is None:
+        subtest = data.get("subtest")
     hand_raw = data.get("hand")
     imu_data = data.get("imu_data")
 
-    if not subtest:
+    if subtest is None:
         return jsonify({"error": "subtest_id is required"}), 400
 
     if not hand_raw:
@@ -85,7 +84,9 @@ def _upload_tremor_json(test_id, test_session):
     hand = (
         "l"
         if hand_raw.lower() in ("left", "l")
-        else "r" if hand_raw.lower() in ("right", "r") else None
+        else "r"
+        if hand_raw.lower() in ("right", "r")
+        else None
     )
     if not hand:
         return (
@@ -231,17 +232,14 @@ def _upload_tremor_file(test_id, test_session):
 
 @upload_bp.route("/<int:test_id>/drawings", methods=["POST"])
 @authenticate
+@invalidates("test:{test_id}", "tests:*")
 def upload_drawings(test_id):
     """Upload spiral drawing images (atomic: both files or nothing)."""
-    current_user = db.session.get(User, g.user_id)
-    if not current_user:
-        return jsonify({"error": "User not found"}), 404
-
     test_session = db.session.get(TestSession, test_id)
     if not test_session:
         return jsonify({"error": "Test not found"}), 404
 
-    if test_session.user_id != current_user.id:
+    if test_session.user_id != g.user_id:
         return jsonify({"error": "Forbidden"}), 403
 
     if test_session.test_type != "drawing":
@@ -351,17 +349,14 @@ def upload_drawings(test_id):
 
 @upload_bp.route("/<int:test_id>/voice", methods=["POST"])
 @authenticate
+@invalidates("test:{test_id}", "tests:*")
 def upload_voice(test_id):
     """Upload voice recording."""
-    current_user = db.session.get(User, g.user_id)
-    if not current_user:
-        return jsonify({"error": "User not found"}), 404
-
     test_session = db.session.get(TestSession, test_id)
     if not test_session:
         return jsonify({"error": "Test not found"}), 404
 
-    if test_session.user_id != current_user.id:
+    if test_session.user_id != g.user_id:
         return jsonify({"error": "Forbidden"}), 403
 
     if test_session.test_type != "voice":
@@ -418,23 +413,23 @@ def upload_voice(test_id):
 
 @upload_bp.route("/<int:test_id>/complete", methods=["POST"])
 @authenticate_jwt_or_esp32
+@invalidates("test:{test_id}", "tests:*")
 def complete_test(test_id):
     """Mark a test as completed."""
-    current_user = db.session.get(User, g.user_id)
-    if not current_user:
-        return jsonify({"error": "User not found"}), 404
-
     test_session = db.session.get(TestSession, test_id)
     if not test_session:
+        logger.warning(f"complete_test not found: test_id={test_id}")
         return jsonify({"error": "Test not found"}), 404
 
-    if test_session.user_id != current_user.id:
+    if test_session.user_id != g.user_id:
         return jsonify({"error": "Forbidden"}), 403
 
     if test_session.status == "completed":
+        logger.warning(f"complete_test already completed: test_id={test_id}")
         return jsonify({"error": "Test is already completed"}), 400
 
     if test_session.status == "pending":
+        logger.warning(f"complete_test no uploads: test_id={test_id}, type={test_session.test_type}")
         return jsonify({"error": "Test has no uploads yet"}), 400
 
     uploaded_inputs = TestInput.query.filter_by(test_session_id=test_id).all()
@@ -491,7 +486,7 @@ def complete_test(test_id):
     ml_status = "processing"
     try:
         queue = get_ml_queue()
-        job = queue.enqueue(run_inference, test_session.id, job_timeout="5m")
+        job = queue.enqueue("ml.tasks.run_inference", test_session.id, job_timeout="5m")
         test_session.ml_job_id = job.id
         ml_job_id = job.id
         db.session.commit()
@@ -525,6 +520,7 @@ def complete_test(test_id):
 
 @upload_bp.route("/<int:test_id>/reset", methods=["POST"])
 @authenticate_jwt_or_esp32
+@invalidates("test:{test_id}", "tests:*")
 def reset_test(test_id):
     """
     Reset a test session by deleting all uploaded files and inputs,
@@ -534,15 +530,11 @@ def reset_test(test_id):
     Only allowed if the test's group is NOT completed.
     Auth: JWT user (owner) or paired ESP32 device.
     """
-    current_user = db.session.get(User, g.user_id)
-    if not current_user:
-        return jsonify({"error": "User not found"}), 404
-
     test_session = db.session.get(TestSession, test_id)
     if not test_session:
         return jsonify({"error": "Test not found"}), 404
 
-    if test_session.user_id != current_user.id:
+    if test_session.user_id != g.user_id:
         return jsonify({"error": "Forbidden"}), 403
 
     # Check if group is completed - reject reset if so
@@ -560,10 +552,22 @@ def reset_test(test_id):
             )
 
     # Get optional new config from request body
+    json_body = request.get_json(silent=True) or {}
+    # Check if config is at root level or inside "config" key
     new_config = None
-    json_body = request.get_json(silent=True)
-    if json_body and "config" in json_body:
+    if "config" in json_body:
         new_config = json_body["config"]
+        # Unwrap "subtest" key if present (mobile app sends nested format)
+        if isinstance(new_config, dict) and "subtest" in new_config:
+            new_config = new_config["subtest"]
+    elif any(
+        k in json_body for k in ("0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10")
+    ):
+        # Config sent directly at root level
+        new_config = json_body
+        logger.info(f"Using root-level config: {new_config}")
+
+    if new_config is not None:
         if not isinstance(new_config, dict):
             return jsonify({"error": "config must be an object"}), 400
         valid_keys = {"0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10"}
@@ -608,6 +612,7 @@ def reset_test(test_id):
     # Update config if new config provided
     if new_config is not None:
         test_session.config = new_config
+        logger.info(f"Updated test {test_id} config to: {new_config}")
 
     # Reset group state if applicable
     if test_session.group_id:
@@ -621,7 +626,7 @@ def reset_test(test_id):
 
     db.session.commit()
 
-    logger.info(f"Test {test_id} reset by user {current_user.id}")
+    logger.info(f"Test {test_id} reset by user {g.user_id}")
 
     return (
         jsonify(
@@ -643,15 +648,11 @@ def start_test(test_id):
 
     Auth: JWT user (owner) or paired ESP32 device.
     """
-    current_user = db.session.get(User, g.user_id)
-    if not current_user:
-        return jsonify({"error": "User not found"}), 404
-
     test_session = db.session.get(TestSession, test_id)
     if not test_session:
         return jsonify({"error": "Test not found"}), 404
 
-    if test_session.user_id != current_user.id:
+    if test_session.user_id != g.user_id:
         return jsonify({"error": "Forbidden"}), 403
 
     if test_session.test_type != "tremor":
@@ -670,7 +671,7 @@ def start_test(test_id):
 
     try:
         success = connection_manager.send_event(
-            current_user.id,
+            g.user_id,
             "test_started",
             {
                 "test_id": test_session.id,
@@ -680,7 +681,7 @@ def start_test(test_id):
         )
         if success:
             logger.info(
-                f"test_started event sent for test {test_id} to user {current_user.id}"
+                f"test_started event sent for test {test_id} to user {g.user_id}"
             )
             return (
                 jsonify(

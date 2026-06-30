@@ -12,7 +12,7 @@ import time
 import uuid
 from datetime import datetime, timezone
 
-from flask import Flask, abort, g, jsonify, request
+from flask import Flask, abort, current_app, g, jsonify, request
 from flask_cors import CORS
 from flask_migrate import Migrate
 from loguru import logger
@@ -114,6 +114,10 @@ def console_sink(message) -> None:
 _log_file: io.TextIOWrapper | None = None
 _log_file_date: str | None = None
 _log_lock = threading.Lock()
+
+# In-memory fixed-window rate limiting buckets: {(ip, window): count}
+_rate_limit_buckets: dict[tuple[str, int], int] = {}
+_rate_limit_lock = threading.Lock()
 
 
 def file_sink(message) -> None:
@@ -228,8 +232,9 @@ def _collect_runtime_metrics() -> None:
 
     try:
         from redis import Redis
+        from config import Config
 
-        r = Redis.from_url(Config.REDIS_URL)
+        r = Redis(connection_pool=Config.redis_pool())
 
         queue_depth = int(r.llen("rq:queue:ml"))
         ML_QUEUE_DEPTH.set(queue_depth)
@@ -275,6 +280,18 @@ def _collect_runtime_metrics() -> None:
         pass
 
 
+def _get_client_ip() -> str:
+    # X-Real-IP is set by nginx and cannot be spoofed by the client
+    real_ip = request.headers.get("X-Real-IP", "").strip()
+    if real_ip:
+        return real_ip
+    # nginx $proxy_add_x_forwarded_for appends the real client IP last
+    forwarded_for = request.headers.get("X-Forwarded-For", "").strip()
+    if forwarded_for:
+        return forwarded_for.rsplit(",", 1)[-1].strip()
+    return request.remote_addr or "unknown"
+
+
 # ── App factory ───────────────────────────────────────────────────────────────
 def create_app(config_override=None):
     app = Flask(__name__)
@@ -299,8 +316,48 @@ def create_app(config_override=None):
         CORS(app, origins=[])
 
     @app.before_request
+    def global_rate_limit():
+        cfg = current_app.config
+        if not cfg.get("RATE_LIMIT_ENABLED", Config.RATE_LIMIT_ENABLED):
+            return None
+        exempt = cfg.get("RATE_LIMIT_EXEMPT_PATHS", Config.RATE_LIMIT_EXEMPT_PATHS)
+        if request.path in exempt:
+            return None
+
+        client_ip = _get_client_ip()
+        window_secs = cfg.get("RATE_LIMIT_WINDOW_SECONDS", Config.RATE_LIMIT_WINDOW_SECONDS)
+        limit = cfg.get("RATE_LIMIT_REQUESTS", Config.RATE_LIMIT_REQUESTS)
+        window = int(time.time()) // window_secs
+        key = (client_ip, window)
+
+        with _rate_limit_lock:
+            current = _rate_limit_buckets.get(key, 0) + 1
+            _rate_limit_buckets[key] = current
+
+            # Best-effort cleanup for stale windows
+            if len(_rate_limit_buckets) > 5000:
+                cutoff = window - 2
+                stale_keys = [k for k in _rate_limit_buckets if k[1] < cutoff]
+                for stale_key in stale_keys:
+                    _rate_limit_buckets.pop(stale_key, None)
+
+        if current > limit:
+            return (
+                jsonify(
+                    {
+                        "error": "Too many requests",
+                        "ip": client_ip,
+                        "limit": limit,
+                        "window_seconds": window_secs,
+                    }
+                ),
+                429,
+            )
+        return None
+
+    @app.before_request
     def check_ip():
-        if Config.ALLOWED_IPS and request.remote_addr not in Config.ALLOWED_IPS:
+        if Config.ALLOWED_IPS and _get_client_ip() not in Config.ALLOWED_IPS:
             abort(403)
 
     @app.before_request
@@ -308,10 +365,12 @@ def create_app(config_override=None):
         try:
             g.start_time = time.time()
             g.request_id = str(uuid.uuid4())[:8]
-            g.skip_access_log = not should_log_request_path(request.path)
 
-            if g.skip_access_log:
+            if not should_log_request_path(request.path):
+                g.skip_access_log = True
                 return
+            g.skip_access_log = False
+            g.client_ip = _get_client_ip()
 
             colored = use_color_logs()
             method_token = (
@@ -320,7 +379,7 @@ def create_app(config_override=None):
                 else request.method
             )
             logger.bind(request_id=g.request_id).info(
-                "→ " + method_token + " " + request.path
+                "→ " + method_token + " " + request.path + " ip=" + g.client_ip
             )
             # Only log body in development, never in production
             if os.environ.get("FLASK_ENV", "production") == "development":
@@ -374,6 +433,8 @@ def create_app(config_override=None):
                     + status_token
                     + " "
                     + duration_token
+                    + " ip="
+                    + g.get("client_ip", _get_client_ip())
                 )
 
             endpoint = request.url_rule.rule if request.url_rule else request.path
@@ -397,6 +458,7 @@ def create_app(config_override=None):
 
     from routes.auth_routes import auth_bp
     from routes.esp32_devices_routes import esp32_devices_bp
+    from routes.esp32_log_routes import esp32_log_bp
     from routes.esp32_routes import esp32_bp
     from routes.file_routes import file_bp
     from routes.group_routes import group_bp
@@ -413,6 +475,7 @@ def create_app(config_override=None):
     app.register_blueprint(upload_bp)
     app.register_blueprint(esp32_bp)
     app.register_blueprint(esp32_devices_bp)
+    app.register_blueprint(esp32_log_bp)
     app.register_blueprint(file_bp)
 
     @app.route("/health", methods=["GET"])
@@ -468,7 +531,11 @@ def create_app(config_override=None):
 
     @app.errorhandler(404)
     def not_found(error):
-        return jsonify({"error": "Not found"}), 404
+        return jsonify({"error": "Not found", "ip": _get_client_ip()}), 404
+
+    @app.errorhandler(429)
+    def too_many_requests(error):
+        return jsonify({"error": "Too many requests", "ip": _get_client_ip()}), 429
 
     @app.errorhandler(500)
     def internal_error(error):
@@ -477,6 +544,16 @@ def create_app(config_override=None):
         return (
             jsonify({"error": "Internal server error", "request_id": request_id}),
             500,
+        )
+
+    @app.errorhandler(400)
+    def bad_request(error):
+        """Handle malformed request bodies (e.g. invalid JSON)."""
+        request_id = g.get("request_id", "unknown")
+        logger.warning(f"Bad request (request_id={request_id}): {error}")
+        return (
+            jsonify({"error": "Bad request", "request_id": request_id}),
+            400,
         )
 
     @app.errorhandler(Exception)

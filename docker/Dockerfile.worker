@@ -1,66 +1,132 @@
-FROM python:3.11-slim
-
-WORKDIR /app
+# ── Stage 1: Base Builder ─────────────────────────────────────────────────────
+FROM python:3.11-slim AS builder
+WORKDIR /build
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PIP_NO_CACHE_DIR=1 \
-    PIP_DISABLE_PIP_VERSION_CHECK=1
+    PIP_NO_CACHE_DIR=1
 
-# System deps — combine into one layer, remove build tools after install
+# All build-time tools in one layer
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
-    libc6-dev \
-    libpq-dev \
-    libsndfile1 \
-    ffmpeg \
+    g++ \
     cmake \
-    build-essential \
     make \
     ninja-build \
+    libc6-dev \
+    libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# ── Python deps ──────────────────────────────────────────────────────────────
-# Install torch CPU-only first (saves ~7 GB vs default CUDA build)
-RUN pip install --no-cache-dir \
+# PyTorch CPU first — largest layer, benefits most from caching
+RUN pip install --user --no-cache-dir \
     torch==2.6.0 \
     torchvision==0.21.0 \
     --index-url https://download.pytorch.org/whl/cpu
 
-# All remaining ML deps in one layer
+# praat-parselmouth — use local wheel, fail if missing
+FROM builder AS praat-builder
+WORKDIR /tmp
+COPY docker/praat_parselmouth-0.4.7-cp311-cp311-linux_aarch64.whl .
+RUN pip install --user --no-cache-dir praat_parselmouth-0.4.7-cp311-cp311-linux_aarch64.whl
+
+# Main builder without praat
+FROM builder AS base-deps
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt && \
-    pip install --no-cache-dir \
+RUN pip install --user --no-cache-dir -r requirements.txt && \
+    pip install --user --no-cache-dir \
         albumentations==1.3.1 \
         pycatch22 \
-        joblib==1.3.2 \
-        scikit-learn==1.3.2 \
-        pillow==10.1.0 \
-        numpy==1.24.3 \
-        scipy \
-        pandas \
-        matplotlib \
         librosa \
-        praat-parselmouth==0.4.7 \
-        audioread \
         soundfile \
-        soxr \
         numba \
-        msgpack \
-        pooch \
-        decorator \
-        lazy-loader \
-        stopit \
-        pytz \
-        pyyaml \
-        threadpoolctl \
-        gdown
+        soxr \
+        gdown \
+        pandas==3.0.1 \
+        scipy==1.17.1 \
+        matplotlib==3.10.8 \
+        scikit-learn==1.7.2 \
+        joblib==1.5.3 \
+        threadpoolctl==3.6.0
 
-# ── App code ─────────────────────────────────────────────────────────────────
-COPY . .
+# Merge all deps into single location (avoids double-COPY overwrite issues)
+FROM base-deps AS final-deps
+COPY --from=praat-builder /root/.local /root/.local
 
-# Weights are NOT baked into the image — mount them as a volume instead.
-# See docker-compose.yml: volumes: - ./weights:/app/ml/_FINAL_SCRIPTS/weights
-# To pre-download locally: gdown --folder 1Svo25SRx7RZ7MW8m1abZerdv7ZGypyHT -O ./weights
+# ── Stage 2: Production ───────────────────────────────────────────────────────
+FROM python:3.11-slim AS prod
+WORKDIR /app
 
-CMD ["rq", "worker", "ml"]
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PATH=/home/workeruser/.local/bin:$PATH \
+    PYTHONPATH=/app
+
+# Runtime-only — no cmake, no build-essential
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libpq5 \
+    libsndfile1 \
+    ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN adduser --disabled-password --gecos "" workeruser
+
+RUN mkdir -p /app/ml/_FINAL_SCRIPTS/weights /home/workeruser/.cache/gdown /home/workeruser/.cache/torch/hub/checkpoints && chown -R workeruser:workeruser /app/ml /home/workeruser
+
+# Single COPY from merged final-deps stage
+COPY --from=final-deps --chown=workeruser:workeruser /root/.local /home/workeruser/.local
+COPY --chown=workeruser:workeruser . .
+
+COPY --chown=workeruser:workeruser docker/worker-entrypoint.sh /app/worker-entrypoint.sh
+RUN chmod +x /app/worker-entrypoint.sh
+
+USER workeruser
+
+# Healthcheck uses Celery ping only — fail if worker not ready
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD celery -A app.celery inspect ping --timeout 5 -d celery@$HOSTNAME
+
+ENTRYPOINT ["/app/worker-entrypoint.sh"]
+
+# ── Stage 3: Development ───────────────────────────────────────────────────────
+FROM python:3.11-slim AS dev
+WORKDIR /app
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PATH=/home/workeruser/.local/bin:$PATH \
+    PYTHONPATH=/app \
+    FLASK_DEBUG=1
+
+# Dev needs build tools to compile praat-parselmouth at runtime
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    g++ \
+    cmake \
+    make \
+    ninja-build \
+    libc6-dev \
+    libpq-dev \
+    libpq5 \
+    libsndfile1 \
+    ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN adduser --disabled-password --gecos "" workeruser
+
+RUN mkdir -p /app/ml/_FINAL_SCRIPTS/weights /home/workeruser/.cache/gdown /home/workeruser/.cache/torch/hub/checkpoints /home/workeruser/.cache/pip \
+    && chown -R workeruser:workeruser /app/ml /home/workeruser
+
+# Copy base deps only (no praat) — will be installed at runtime via command
+COPY --from=base-deps --chown=workeruser:workeruser /root/.local /home/workeruser/.local
+
+# Copy source code so RQ can discover ml.tasks
+COPY --chown=workeruser:workeruser . .
+
+# Copy entrypoint for dev (needed even with volume mounts)
+COPY --chown=workeruser:workeruser docker/worker-entrypoint.sh /app/worker-entrypoint.sh
+RUN chmod +x /app/worker-entrypoint.sh
+
+USER workeruser
+
+# Dev uses hot-reload; praat installed at runtime via command
+CMD ["sh", "-c", "pip install --user praat-parselmouth==0.4.7 && /app/worker-entrypoint.sh"]

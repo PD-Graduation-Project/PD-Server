@@ -14,7 +14,6 @@ from loguru import logger
 from config import Config
 from models.database import db
 from models.test_models import TestGroup, TestSession
-from models.user import User
 
 
 def with_retry(max_retries=3, delay=1, backoff=2):
@@ -73,16 +72,20 @@ def run_inference(session_id: int) -> dict:
             logger.error(f"Session {session_id} not found for ML inference")
             return {"success": False, "error": "Session not found"}
 
-        # Idempotency: skip if already completed or failed
-        if session.ml_status in ("completed", "failed"):
+        # Idempotency: completed sessions can be safely skipped.
+        if session.ml_status == "completed":
             logger.info(
-                f"Session {session_id} already has ml_status={session.ml_status}, skipping"
+                f"Session {session_id} already has ml_status=completed, skipping"
             )
             return {
-                "success": session.ml_status == "completed",
+                "success": True,
                 "ml_score": session.ml_score,
                 "skipped": True,
             }
+
+        # Preserve failure semantics for RQ retries/monitoring.
+        if session.ml_status == "failed":
+            raise RuntimeError(f"Session {session_id} already has ml_status=failed")
 
         try:
             started_at = time.time()
@@ -169,6 +172,13 @@ def run_inference(session_id: int) -> dict:
                 duration_seconds = max(0.0, time.time() - started_at)
                 r.incrbyfloat("pd:ml:duration_sum_seconds", duration_seconds)
                 r.incr("pd:ml:duration_count")
+
+                r.delete(f"cache:v1:user:{session.user_id}:test:{session_id}")
+                if session.group_id:
+                    r.delete(
+                        f"cache:v1:user:{session.user_id}:group:{session.group_id}"
+                    )
+
                 r.close()
             except Exception:
                 pass
@@ -214,4 +224,13 @@ def run_inference(session_id: int) -> dict:
                     except Exception:
                         db.session.rollback()
 
-            return {"success": False, "error": str(e)}
+            try:
+                from redis import Redis
+
+                r = Redis.from_url(Config.REDIS_URL)
+                r.delete(f"cache:v1:user:{session.user_id}:test:{session_id}")
+                r.close()
+            except Exception:
+                pass
+
+            raise
