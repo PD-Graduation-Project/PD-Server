@@ -232,8 +232,9 @@ def _collect_runtime_metrics() -> None:
 
     try:
         from redis import Redis
+        from config import Config
 
-        r = Redis.from_url(Config.REDIS_URL)
+        r = Redis(connection_pool=Config.redis_pool())
 
         queue_depth = int(r.llen("rq:queue:ml"))
         ML_QUEUE_DEPTH.set(queue_depth)
