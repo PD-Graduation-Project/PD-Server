@@ -1,10 +1,9 @@
 import json
 import queue
 import threading
-from datetime import datetime
 
 from loguru import logger
-from redis import ConnectionPool, Redis
+from redis import Redis
 
 from config import Config
 
@@ -20,17 +19,12 @@ class ESP32ConnectionManager:
     CONNECTION_TTL = 90  # longer than heartbeat interval (60s) to avoid flapping
 
     def __init__(self):
-        self._pool = ConnectionPool.from_url(
-            Config.REDIS_URL,
-            decode_responses=True,
-            max_connections=20,
-        )
         self._lock = threading.Lock()
         self._local_listeners: dict = {}
 
     def _redis(self) -> Redis:
         """Get a client from the shared pool - no new connection each time."""
-        return Redis(connection_pool=self._pool)
+        return Redis(connection_pool=Config.redis_pool())
 
     def _conn_key(self, user_id):
         return f"{self.CONNECTION_KEY_PREFIX}{user_id}"
@@ -185,9 +179,8 @@ class ESP32ConnectionManager:
         """Get list of all connected device user IDs."""
         try:
             r = self._redis()
-            keys = r.keys(f"{self.CONNECTION_KEY_PREFIX}*")
             result = []
-            for key in keys:
+            for key in r.scan_iter(f"{self.CONNECTION_KEY_PREFIX}*"):
                 data = r.hgetall(key)
                 if data.get("connected") == "1":
                     try:

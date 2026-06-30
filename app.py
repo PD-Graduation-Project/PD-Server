@@ -12,7 +12,7 @@ import time
 import uuid
 from datetime import datetime, timezone
 
-from flask import Flask, abort, g, jsonify, request
+from flask import Flask, abort, current_app, g, jsonify, request
 from flask_cors import CORS
 from flask_migrate import Migrate
 from loguru import logger
@@ -232,8 +232,9 @@ def _collect_runtime_metrics() -> None:
 
     try:
         from redis import Redis
+        from config import Config
 
-        r = Redis.from_url(Config.REDIS_URL)
+        r = Redis(connection_pool=Config.redis_pool())
 
         queue_depth = int(r.llen("rq:queue:ml"))
         ML_QUEUE_DEPTH.set(queue_depth)
@@ -280,12 +281,14 @@ def _collect_runtime_metrics() -> None:
 
 
 def _get_client_ip() -> str:
-    forwarded_for = request.headers.get("X-Forwarded-For", "").strip()
-    if forwarded_for:
-        return forwarded_for.split(",", 1)[0].strip()
+    # X-Real-IP is set by nginx and cannot be spoofed by the client
     real_ip = request.headers.get("X-Real-IP", "").strip()
     if real_ip:
         return real_ip
+    # nginx $proxy_add_x_forwarded_for appends the real client IP last
+    forwarded_for = request.headers.get("X-Forwarded-For", "").strip()
+    if forwarded_for:
+        return forwarded_for.rsplit(",", 1)[-1].strip()
     return request.remote_addr or "unknown"
 
 
@@ -314,13 +317,17 @@ def create_app(config_override=None):
 
     @app.before_request
     def global_rate_limit():
-        if not Config.RATE_LIMIT_ENABLED:
+        cfg = current_app.config
+        if not cfg.get("RATE_LIMIT_ENABLED", Config.RATE_LIMIT_ENABLED):
             return None
-        if request.path in Config.RATE_LIMIT_EXEMPT_PATHS:
+        exempt = cfg.get("RATE_LIMIT_EXEMPT_PATHS", Config.RATE_LIMIT_EXEMPT_PATHS)
+        if request.path in exempt:
             return None
 
         client_ip = _get_client_ip()
-        window = int(time.time()) // Config.RATE_LIMIT_WINDOW_SECONDS
+        window_secs = cfg.get("RATE_LIMIT_WINDOW_SECONDS", Config.RATE_LIMIT_WINDOW_SECONDS)
+        limit = cfg.get("RATE_LIMIT_REQUESTS", Config.RATE_LIMIT_REQUESTS)
+        window = int(time.time()) // window_secs
         key = (client_ip, window)
 
         with _rate_limit_lock:
@@ -334,14 +341,14 @@ def create_app(config_override=None):
                 for stale_key in stale_keys:
                     _rate_limit_buckets.pop(stale_key, None)
 
-        if current > Config.RATE_LIMIT_REQUESTS:
+        if current > limit:
             return (
                 jsonify(
                     {
                         "error": "Too many requests",
                         "ip": client_ip,
-                        "limit": Config.RATE_LIMIT_REQUESTS,
-                        "window_seconds": Config.RATE_LIMIT_WINDOW_SECONDS,
+                        "limit": limit,
+                        "window_seconds": window_secs,
                     }
                 ),
                 429,
@@ -358,11 +365,12 @@ def create_app(config_override=None):
         try:
             g.start_time = time.time()
             g.request_id = str(uuid.uuid4())[:8]
-            g.client_ip = _get_client_ip()
-            g.skip_access_log = not should_log_request_path(request.path)
 
-            if g.skip_access_log:
+            if not should_log_request_path(request.path):
+                g.skip_access_log = True
                 return
+            g.skip_access_log = False
+            g.client_ip = _get_client_ip()
 
             colored = use_color_logs()
             method_token = (
@@ -536,6 +544,16 @@ def create_app(config_override=None):
         return (
             jsonify({"error": "Internal server error", "request_id": request_id}),
             500,
+        )
+
+    @app.errorhandler(400)
+    def bad_request(error):
+        """Handle malformed request bodies (e.g. invalid JSON)."""
+        request_id = g.get("request_id", "unknown")
+        logger.warning(f"Bad request (request_id={request_id}): {error}")
+        return (
+            jsonify({"error": "Bad request", "request_id": request_id}),
+            400,
         )
 
     @app.errorhandler(Exception)

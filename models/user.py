@@ -1,8 +1,20 @@
+import os
 from datetime import datetime
 
+from gevent.threadpool import ThreadPoolExecutor
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from models.database import db
+
+_bcrypt_pool = ThreadPoolExecutor(max_workers=4)
+
+
+def _reset_bcrypt_pool() -> None:
+    global _bcrypt_pool
+    _bcrypt_pool = ThreadPoolExecutor(max_workers=4)
+
+
+os.register_at_fork(after_in_child=_reset_bcrypt_pool)
 
 
 class User(db.Model):
@@ -57,10 +69,10 @@ class User(db.Model):
     )
 
     def set_password(self, password):
-        self.password_hash = generate_password_hash(password)
+        self.password_hash = _bcrypt_pool.submit(generate_password_hash, password).result()
 
     def check_password(self, password):
-        return check_password_hash(self.password_hash, password)
+        return _bcrypt_pool.submit(check_password_hash, self.password_hash, password).result()
 
     def to_dict(self):
         return {

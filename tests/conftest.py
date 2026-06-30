@@ -57,6 +57,8 @@ def app():
             "JWT_SECRET_KEY": "test-secret-key-do-not-use-in-production",
             "JWT_ALGORITHM": "HS256",
             "FACTORY_SECRET": "test_factory_secret",
+            "RATE_LIMIT_ENABLED": False,
+            "CACHE_ENABLED": False,
         }
     )
 

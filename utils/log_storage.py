@@ -98,14 +98,12 @@ def _append_to_promtail(
         log_type_str = log_type or "unknown"
         with open(promtail_path, "a", encoding="utf-8") as f:
             # Each device writes to its own per-date file, so no cross-device
-            # contention. A shared lock lets concurrent reads proceed freely
-            # while still serialising any same-device concurrent writes.
-            fcntl.flock(f.fileno(), fcntl.LOCK_SH)
+            # contention. Use an exclusive lock to prevent interleaved writes
+            # from concurrent uploads for the same device.
+            fcntl.flock(f.fileno(), fcntl.LOCK_EX)
             try:
-                # Iterate BytesIO line-by-line to avoid decoding/splitting the
-                # entire file into memory at once — O(1) RAM instead of O(n).
-                for raw_bytes in BytesIO(content):
-                    line = raw_bytes.decode("utf-8", errors="replace").strip()
+                for line_bytes in content.splitlines():
+                    line = line_bytes.decode("utf-8", errors="replace").strip()
                     if not line:
                         continue
                     parsed = _parse_esp32_log_line(line)
