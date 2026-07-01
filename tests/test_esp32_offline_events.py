@@ -241,3 +241,132 @@ class TestStartTestEndpoint:
 
         assert response.status_code == 400
         assert "ESP32" in response.get_json()["error"]
+
+
+import queue
+import threading
+from unittest.mock import MagicMock, PropertyMock
+
+
+class TestListenerSelfHeal:
+    """Tests for the self-healing listener (resubscribe on failure)."""
+
+    def test_resubscribe_on_pubsub_exception(self, app, monkeypatch):
+        """When get_message() raises, _resubscribe() is called."""
+        cm = cm_module.connection_manager
+        msg_queue = queue.Queue()
+        stop_event = threading.Event()
+
+        pubsub = MagicMock()
+        pubsub.get_message.side_effect = ConnectionError("Redis went away")
+        type(pubsub).connection = PropertyMock(
+            return_value=MagicMock(is_connected=True)
+        )
+
+        resubscribe_calls = []
+        original_resubscribe = cm._resubscribe
+
+        def tracking_resubscribe(uid, old_ps, lq, se):
+            resubscribe_calls.append(True)
+            return original_resubscribe(uid, old_ps, lq, se)
+
+        monkeypatch.setattr(cm, "_resubscribe", tracking_resubscribe)
+
+        cm._listen(pubsub, msg_queue, 99999, stop_event)
+
+        assert len(resubscribe_calls) >= 1, (
+            "_resubscribe should be called when get_message() raises"
+        )
+
+    def test_sentinel_when_resubscribe_exhausted(self, app, monkeypatch):
+        """When _resubscribe returns None (all retries failed), __listener_died
+        is pushed to the queue."""
+        cm = cm_module.connection_manager
+        msg_queue = queue.Queue()
+        stop_event = threading.Event()
+
+        pubsub = MagicMock()
+        pubsub.get_message.side_effect = ConnectionError("Redis gone")
+        type(pubsub).connection = PropertyMock(
+            return_value=MagicMock(is_connected=True)
+        )
+
+        monkeypatch.setattr(
+            cm, "_RESUBSCRIBE_DELAYS", [0.01]
+        )
+
+        cm._listen(pubsub, msg_queue, 99999, stop_event)
+
+        assert not msg_queue.empty()
+        msg = msg_queue.get_nowait()
+        assert msg["event"] == "__listener_died"
+
+    def test_resubscribe_skipped_on_clean_shutdown(self, app, monkeypatch):
+        """When stop_event is set, _resubscribe is not called."""
+        cm = cm_module.connection_manager
+        msg_queue = queue.Queue()
+        stop_event = threading.Event()
+        stop_event.set()
+
+        pubsub = MagicMock()
+        pubsub.get_message.side_effect = RuntimeError("should not be called")
+
+        resubscribe_calls = []
+        original_resubscribe = cm._resubscribe
+
+        def tracking_resubscribe(uid, old_ps, lq, se):
+            resubscribe_calls.append(True)
+            return original_resubscribe(uid, old_ps, lq, se)
+
+        monkeypatch.setattr(cm, "_resubscribe", tracking_resubscribe)
+
+        cm._listen(pubsub, msg_queue, 99999, stop_event)
+
+        assert len(resubscribe_calls) == 0
+        assert msg_queue.empty()
+
+    def test_remove_guard_prevents_stale_cleanup(self, app):
+        """remove() with a stale queue ref does not destroy the active connection."""
+        cm = cm_module.connection_manager
+        active_queue = queue.Queue()
+        stale_queue = queue.Queue()
+
+        cm._local_listeners[42] = {
+            "device_id": "ESP42",
+            "queue": active_queue,
+            "pubsub": MagicMock(),
+            "thread": MagicMock(is_alive=lambda: True),
+            "stop_event": threading.Event(),
+        }
+
+        cm.remove(42, stale_queue)
+
+        assert 42 in cm._local_listeners
+        assert cm._local_listeners[42]["queue"] is active_queue
+
+        cm.remove(42, active_queue)
+
+        assert 42 not in cm._local_listeners
+
+    def test_remove_noop_for_unknown_user(self, app):
+        """remove() does nothing for a user with no connection."""
+        cm = cm_module.connection_manager
+        cm.remove(99999)
+
+    def test_send_event_logs_dead_thread(self, app):
+        """send_event logs a specific warning when the listener thread is dead."""
+        cm = cm_module.connection_manager
+        dead_thread = MagicMock()
+        dead_thread.is_alive.return_value = False
+
+        cm._local_listeners[42] = {
+            "device_id": "ESP42",
+            "queue": queue.Queue(),
+            "pubsub": MagicMock(),
+            "thread": dead_thread,
+            "stop_event": threading.Event(),
+        }
+
+        result = cm.send_event(user_id=42, event="test", data={})
+
+        assert result is False

@@ -130,6 +130,12 @@ def stream():
             while True:
                 try:
                     msg = msg_queue.get(timeout=SSE_HEARTBEAT_INTERVAL)
+                    if msg["event"] == "__listener_died":
+                        logger.warning(
+                            f"ESP32 listener unrecoverable, closing SSE "
+                            f"for device={device_id_str}"
+                        )
+                        break
                     logger.info(
                         f"ESP32 event forwarded: '{msg['event']}' to device={device_id_str}"
                     )
@@ -143,7 +149,7 @@ def stream():
             pass
         finally:
             logger.info(f"ESP32 stream disconnected: device={device_id_str}")
-            connection_manager.remove(user_id)
+            connection_manager.remove(user_id, msg_queue)
             try:
                 dev = db.session.get(ESP32Device, device_id)
                 if dev:
