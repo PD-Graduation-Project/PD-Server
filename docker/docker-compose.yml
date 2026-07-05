@@ -82,9 +82,12 @@ services:
         condition: service_healthy
     volumes:
       - uploads:/app/uploads
+      - app_logs:/app/logs
       - weights:/app/ml/_FINAL_SCRIPTS/weights
       - torch_cache:/home/workeruser/.cache/torch/hub/checkpoints
       - pip_cache:/home/workeruser/.cache/pip
+    expose:
+      - "6001"
     restart: unless-stopped
     labels:
       - com.centurylinklabs.watchtower.enable=true

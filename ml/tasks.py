@@ -9,11 +9,34 @@ import time
 from datetime import datetime, timezone
 from functools import wraps
 
+import datetime as _dt
+import os as _os
+
 from loguru import logger
 
 from config import Config
 from models.database import db
 from models.test_models import TestGroup, TestSession
+from models.user import User
+
+# ── Logging setup ──────────────────────────────────────────────────────────────
+logger.remove()
+_log_level = _os.environ.get("LOG_LEVEL", "INFO").upper()
+logger.add(
+    lambda msg: _os.write(2, msg.encode()),
+    level=_log_level,
+    format="{message}",
+)
+_os.makedirs("logs", exist_ok=True)
+logger.add(
+    "logs/worker_{time:YYYY-MM-DD}.log",
+    level=_log_level,
+    format="{time} | {level:<8} | {name}:{function}:{line} - {message}",
+    rotation="1 day",
+    retention="7 days",
+    filter=lambda record: record["name"].startswith("ml."),
+)
+# ───────────────────────────────────────────────────────────────────────────────
 
 
 def with_retry(max_retries=3, delay=1, backoff=2):
@@ -89,8 +112,12 @@ def run_inference(session_id: int) -> dict:
 
         try:
             started_at = time.time()
-            ml_score = None
             test_type = session.test_type
+
+            logger.info(
+                f"Starting inference for session {session_id}, "
+                f"type={test_type}, group={session.group_id}, user={session.user_id}"
+            )
 
             if test_type == "tremor":
                 ml_score = float(predict_tremor(session_id))
@@ -100,6 +127,12 @@ def run_inference(session_id: int) -> dict:
                 ml_score = float(predict_voice(session_id))
             else:
                 raise ValueError(f"Unknown test type: {test_type}")
+
+            inference_duration = time.time() - started_at
+            logger.info(
+                f"Inference result for session {session_id}: "
+                f"score={ml_score:.4f}, type={test_type}, duration={inference_duration:.2f}s"
+            )
 
             if math.isnan(ml_score) or math.isinf(ml_score):
                 raise ValueError(
@@ -135,6 +168,10 @@ def run_inference(session_id: int) -> dict:
                     all_done = required == set(type_to_score.keys()) and all(
                         t.status == "completed" for t in group_tests
                     )
+                    logger.info(
+                        f"Group {group.id} status: completed_tests={set(type_to_score.keys())}, "
+                        f"required={required}, all_done={all_done}"
+                    )
 
                     if all_done:
                         group_overall_score = predict_overall(
@@ -157,11 +194,14 @@ def run_inference(session_id: int) -> dict:
                         db.session.commit()
                         group_completed = True
                         logger.info(
-                            f"Group {group.id} completed with overall score {group_overall_score}"
+                            f"Group {group.id} completed with overall score {group_overall_score:.4f}"
                         )
 
+            total_duration = time.time() - started_at
             logger.info(
-                f"Inference completed for session {session_id}, score: {ml_score}"
+                f"Job complete for session {session_id}: "
+                f"score={ml_score:.4f}, group_completed={group_completed}, "
+                f"duration={total_duration:.2f}s"
             )
 
             try:
@@ -169,19 +209,20 @@ def run_inference(session_id: int) -> dict:
 
                 r = Redis.from_url(Config.REDIS_URL)
                 r.incr("pd:ml:completed_total")
-                duration_seconds = max(0.0, time.time() - started_at)
-                r.incrbyfloat("pd:ml:duration_sum_seconds", duration_seconds)
+                r.incrbyfloat("pd:ml:duration_sum_seconds", total_duration)
                 r.incr("pd:ml:duration_count")
 
                 r.delete(f"cache:v1:user:{session.user_id}:test:{session_id}")
+                logger.debug(f"Invalidated cache for test {session_id}")
                 if session.group_id:
                     r.delete(
                         f"cache:v1:user:{session.user_id}:group:{session.group_id}"
                     )
+                    logger.debug(f"Invalidated cache for group {session.group_id}")
 
                 r.close()
-            except Exception:
-                pass
+            except Exception as redis_err:
+                logger.warning(f"Failed to update Redis counters: {redis_err}")
 
             return {
                 "success": True,
@@ -198,30 +239,32 @@ def run_inference(session_id: int) -> dict:
                 r = Redis.from_url(Config.REDIS_URL)
                 r.incr("pd:ml:failed_total")
                 r.close()
-            except Exception:
-                pass
-            # Rollback first to ensure clean state
+            except Exception as redis_err:
+                logger.warning(f"Failed to increment failed counter: {redis_err}")
             db.session.rollback()
 
-            # Re-fetch session to get fresh state
             session = db.session.get(TestSession, session_id)
             if session:
+                logger.info(f"Marking session {session_id} as failed")
                 session.ml_score = None
                 session.ml_status = "failed"
                 session.ml_job_id = None
                 try:
                     db.session.commit()
-                except Exception:
+                except Exception as commit_err:
+                    logger.warning(f"Failed to mark session {session_id} as failed: {commit_err}")
                     db.session.rollback()
 
             if session and session.group_id:
                 group = db.session.get(TestGroup, session.group_id)
                 if group:
+                    logger.info(f"Marking group {group.id} as failed due to session {session_id}")
                     group.ml_status = "failed"
                     group.ml_job_id = None
                     try:
                         db.session.commit()
-                    except Exception:
+                    except Exception as commit_err:
+                        logger.warning(f"Failed to mark group {group.id} as failed: {commit_err}")
                         db.session.rollback()
 
             try:
@@ -229,8 +272,9 @@ def run_inference(session_id: int) -> dict:
 
                 r = Redis.from_url(Config.REDIS_URL)
                 r.delete(f"cache:v1:user:{session.user_id}:test:{session_id}")
+                logger.debug(f"Invalidated cache for failed test {session_id}")
                 r.close()
-            except Exception:
-                pass
+            except Exception as redis_err:
+                logger.warning(f"Failed to invalidate cache for failed session: {redis_err}")
 
             raise

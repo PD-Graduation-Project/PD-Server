@@ -1,0 +1,8 @@
+services:
+  fail2ban-exporter:
+    profiles:
+      - disabled
+
+  fail2ban-geo-exporter:
+    profiles:
+      - disabled

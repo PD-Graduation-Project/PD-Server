@@ -1,7 +1,7 @@
 #!/bin/sh
 set -e
 
-mkdir -p /home/workeruser/.cache/gdown
+mkdir -p /home/workeruser/.cache/gdown /app/logs
 
 cd /app/ml/_FINAL_SCRIPTS
 
@@ -17,4 +17,10 @@ fi
 
 cd /app
 
+echo 'Starting Prometheus metrics endpoint on port 6001...'
+python -m ml.worker_metrics &
+METRICS_PID=$!
+echo "Metrics server PID: $METRICS_PID"
+
+echo 'Starting RQ worker...'
 exec rq worker ml

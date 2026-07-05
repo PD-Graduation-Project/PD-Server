@@ -43,6 +43,7 @@ services:
       - ../app:/app/app
       - ../requirements.txt:/app/requirements.txt:ro
       - uploads:/app/uploads
+      - app_logs:/app/logs
       - weights:/app/ml/_FINAL_SCRIPTS/weights
       - torch_cache:/home/workeruser/.cache/torch/hub/checkpoints
       - pip_cache:/home/workeruser/.cache/pip
@@ -60,7 +61,7 @@ services:
       redis:
         condition: service_healthy
     command:
-      sh -c "pip install --no-cache-dir /home/workeruser/praat_parselmouth-0.4.7-cp311-cp311-linux_aarch64.whl rq || pip install praat-parselmouth==0.4.7 rq && watchfiles 'rq worker ml' /app/app /app/ml"
+      sh -c "pip install --no-cache-dir /home/workeruser/praat_parselmouth-0.4.7-cp311-cp311-linux_aarch64.whl rq || pip install praat-parselmouth==0.4.7 rq && cd /app/ml/_FINAL_SCRIPTS && (ls weights/*.pth 2>/dev/null || gdown '1Svo25SRx7RZ7MW8m1abZerdv7zgypyHT' --folder -O weights) && cd /app && python -m ml.worker_metrics & watchfiles 'rq worker ml' /app/app /app/ml"
 
   nginx:
     build:

@@ -15,11 +15,27 @@ scrape_configs:
         labels:
           job: pd-server
           service: app
-          __path__: /app/logs/*.log
+          __path__: /app/logs/app_*.log
     pipeline_stages:
       - json:
           expressions:
             level: level
+            request_id: request_id
+      - labels:
+          level:
+
+  - job_name: worker-logs
+    static_configs:
+      - targets: [localhost]
+        labels:
+          job: pd-server
+          service: worker
+          __path__: /app/logs/worker_*.log
+    pipeline_stages:
+      - json:
+          expressions:
+            level: level
+            timestamp: timestamp
             request_id: request_id
       - labels:
           level:
